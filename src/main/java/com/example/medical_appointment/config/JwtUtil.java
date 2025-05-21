@@ -7,6 +7,8 @@ import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import org.springframework.stereotype.Component;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 import javax.crypto.SecretKey;
 
@@ -18,8 +20,12 @@ public class JwtUtil {
             "your-very-secure-and-long-secret-key-1234567890".getBytes(StandardCharsets.UTF_8));
     private final long expirationTime = 30L * 24 * 60 * 60 * 1000; // 30 jours en millisecondes
 
-    public String generateToken(String email) {
+    // Modifier generateToken pour accepter le rôle comme paramètre
+    public String generateToken(String email, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("role", role); // ✅ Ajouter le rôle dans les claims
         return Jwts.builder()
+                .setClaims(claims)
                 .subject(email)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationTime))
@@ -29,6 +35,10 @@ public class JwtUtil {
 
     public String extractEmail(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    public String extractRole(String token) {
+        return extractClaim(token, claims -> claims.get("role", String.class)); // ✅ Extraire le rôle
     }
 
     public Date extractExpiration(String token) {
