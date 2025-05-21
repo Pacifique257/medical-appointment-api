@@ -40,11 +40,13 @@ public class UserController {
             user.setGender(userDTO.getGender());
             user.setProfilePicture(userDTO.getProfilePicture());
             user.setPassword(userDTO.getPassword());
+
             if (userDTO.getSpecialtyId() != null) {
                 Specialty specialty = new Specialty();
                 specialty.setId(userDTO.getSpecialtyId());
                 user.setSpecialty(specialty);
             }
+
             User createdUser = userService.createUser(user);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
         } catch (IllegalArgumentException e) {
@@ -52,7 +54,16 @@ public class UserController {
         }
     }
 
-    @GetMapping("/{email}")
+    @GetMapping("/id/{id}")
+    public ResponseEntity<?> getUserById(@PathVariable Long id) {
+        User user = userService.getUserById(id);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found"));
+        }
+        return ResponseEntity.ok(user);
+    }
+
+    @GetMapping("/email/{email}")
     public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
         User user = userService.getUserByEmail(email);
         if (user == null) {
@@ -61,3 +72,5 @@ public class UserController {
         return ResponseEntity.ok(user);
     }
 }
+
+

@@ -23,8 +23,8 @@ public class AuthController {
     private final TokenBlacklist tokenBlacklist;
 
     @Autowired
-    public AuthController(UserService userService, BCryptPasswordEncoder passwordEncoder, 
-                         JwtUtil jwtUtil, TokenBlacklist tokenBlacklist) {
+    public AuthController(UserService userService, BCryptPasswordEncoder passwordEncoder,
+                          JwtUtil jwtUtil, TokenBlacklist tokenBlacklist) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
@@ -45,10 +45,12 @@ public class AuthController {
         }
 
         if (passwordEncoder.matches(password, user.getPassword())) {
-            String token = jwtUtil.generateToken(email);
+            String token = jwtUtil.generateToken(email, user.getRole()); // ✅ Passer le rôle
             response.put("message", "Login successful");
             response.put("accessToken", token);
             response.put("userId", user.getId());
+            response.put("role", user.getRole());
+            System.out.println("Login successful, userId: " + user.getId() + ", role: " + user.getRole());
             return ResponseEntity.ok(response);
         } else {
             response.put("error", "Invalid password");
