@@ -27,7 +27,7 @@ public class AppointmentServiceTest {
     private AvailabilityRepository availabilityRepository;
 
     @Mock
-    private EmailService emailService;
+   // private EmailService emailService;
 
     @InjectMocks
     private AppointmentService appointmentService;

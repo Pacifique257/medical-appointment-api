@@ -18,22 +18,39 @@
         .navbar .nav-link, .navbar-brand {
             color: gold !important;
         }
-        .card {
-            min-height: 200px;
-            background-color: #ffffff;
-            border: 1px solid #ddd;
-            transition: 0.3s;
+        .container {
+            max-width: 800px;
         }
-        .card:hover {
-            transform: scale(1.02);
-            border-color: gold;
-        }
-        .card-title {
+        .form-label {
             color: #6c757d;
             font-weight: bold;
         }
-        .card-text {
-            color: #495057;
+        .btn-primary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        .btn-primary:hover {
+            background-color: gold;
+            border-color: gold;
+            color: #6c757d;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #c82333;
+        }
+        .slot-container {
+            margin-bottom: 15px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #ffffff;
+        }
+        .text-gold {
+            color: gold;
         }
         footer {
             background-color: #6c757d;
@@ -45,68 +62,157 @@
     </style>
 </head>
 <body>
-<!-- Navbar -->
-<nav class="navbar navbar-expand-lg">
-    <div class="container-fluid">
-        <a class="navbar-brand" th:text="'Dr. ' + ${user.lastName} + ' ' + ${user.firstName}">Dr. John Doe</a>
-        <button class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse justify-content-end" id="navbarContent">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link" href="/doctor/profile">My Profile</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link text-danger" th:href="@{/logout}">Logout</a>
-                </li>
-            </ul>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" th:text="'Dr. ' + ${user.firstName} + ' ' + ${user.lastName}"></a>
+            <div class="navbar-nav">
+                <a class="nav-link" th:href="@{/doctor/availability(token=${token})}">List of Availabilities</a>
+                <a class="nav-link" th:href="@{/doctor/availability/new(token=${token})}">Create Availability</a>
+                <a class="nav-link text-danger" th:href="@{/logout}">Logout</a>
+            </div>
         </div>
-    </div>
-</nav>
+    </nav>
 
-<!-- Main Content -->
-<div class="container mt-5">
-    <h2 class="card-title">Create New Availability</h2>
-    <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
-    <div class="card p-4 shadow-sm">
-        <form th:action="@{/availabilities}" th:object="${availabilityDTO}" method="post">
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <h2 class="text-gold text-center">Create New Availability</h2>
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+        <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
+
+        <form th:action="@{/doctor/availability/new(token=${token})}" method="post" id="availabilityForm" onsubmit="logSubmit()">
+            <input type="hidden" th:value="${token}" name="token"/>
             <div class="mb-3">
-                <label for="date" class="form-label card-text">Availability Date</label>
-                <input type="date" class="form-control" id="date" th:field="*{date}" required/>
+                <label for="date" class="form-label">Date</label>
+                <input type="date" class="form-control" id="date" name="date" th:value="${#dates.format(#dates.createNow(), 'yyyy-MM-dd')}" required>
             </div>
             <div class="mb-3">
-                <label for="dayOfWeek" class="form-label card-text">Day of Week</label>
-                <select class="form-select" id="dayOfWeek" th:field="*{dayOfWeek}" required>
-                    <option value="">Select a Day</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
-                </select>
+                <label for="dayOfWeek" class="form-label">Day of Week</label>
+                <input type="text" class="form-control" id="dayOfWeek" name="dayOfWeek" readonly>
+            </div>
+            <div id="slots">
+                <div class="slot-container" id="slot-1">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label for="startTime-1" class="form-label">Start Time</label>
+                            <input type="time" class="form-control" id="startTime-1" name="startTimes" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="endTime-1" class="form-label">End Time</label>
+                            <input type="time" class="form-control" id="endTime-1" name="endTimes" required>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-danger w-100" onclick="removeSlot(1)" id="remove-1" style="display: none;">Remove</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="mb-3">
-                <label for="timeSlot" class="form-label card-text">Availability Time Slot</label>
-                <input type="text" class="form-control" id="timeSlot" th:field="*{timeSlot}" placeholder="e.g., 09:00-10:00" required/>
+                <button type="button" class="btn btn-primary" onclick="addSlot()">Add Another Slot</button>
             </div>
-            <button type="submit" class="btn btn-primary" style="background-color: #6c757d; border-color: #6c757d;">Save Availability</button>
-            <a th:href="@{/availabilities}" class="btn btn-secondary">Cancel</a>
+            <div class="mb-3 text-center">
+                <button type="submit" class="btn btn-primary">Create</button>
+            </div>
         </form>
-        <a th:href="@{/home-doctor}" class="btn btn-secondary mt-3">Back to Dashboard</a>
-        <a th:href="@{/logout}" class="btn btn-danger mt-3">Logout</a>
     </div>
-</div>
 
-<!-- Footer -->
-<footer>
-    <div class="container">
-        <span>© 2025 Doctor Portal. All rights reserved.</span>
-    </div>
-</footer>
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <span>© 2025 Doctor Portal. All rights reserved.</span>
+        </div>
+    </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let slotCount = 1;
+
+        // Set Day of Week based on Date
+        function updateDayOfWeek() {
+            const dateInput = document.getElementById('date').value;
+            console.log('Updating dayOfWeek for date: ' + dateInput);
+            if (dateInput) {
+                try {
+                    const date = new Date(dateInput);
+                    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const day = days[date.getDay()];
+                    document.getElementById('dayOfWeek').value = day;
+                    console.log('Set dayOfWeek to: ' + day);
+                } catch (e) {
+                    console.error('Error parsing date: ' + e.message);
+                    document.getElementById('dayOfWeek').value = '';
+                }
+            } else {
+                console.log('No date input, clearing dayOfWeek');
+                document.getElementById('dayOfWeek').value = '';
+            }
+        }
+
+        // Initialize Day of Week on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing dayOfWeek');
+            updateDayOfWeek();
+            console.log('Token value: ' + document.querySelector('input[name="token"]').value);
+        });
+        document.getElementById('date').addEventListener('change', () => {
+            console.log('Date changed, updating dayOfWeek');
+            updateDayOfWeek();
+        });
+
+        // Add new time slot
+        function addSlot() {
+            console.log('Adding new slot, current count: ' + slotCount);
+            slotCount++;
+            const slotsDiv = document.getElementById('slots');
+            const newSlot = document.createElement('div');
+            newSlot.className = 'slot-container';
+            newSlot.id = `slot-${slotCount}`;
+            newSlot.innerHTML = `
+                <div class="row">
+                    <div class="col-md-5">
+                        <label for="startTime-${slotCount}" class="form-label">Start Time</label>
+                        <input type="time" class="form-control" id="startTime-${slotCount}" name="startTimes" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="endTime-${slotCount}" class="form-label">End Time</label>
+                        <input type="time" class="form-control" id="endTime-${slotCount}" name="endTimes" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-danger w-100" onclick="removeSlot(${slotCount})" id="remove-${slotCount}">Remove</button>
+                    </div>
+                </div>
+            `;
+            slotsDiv.appendChild(newSlot);
+            if (slotCount > 1) {
+                document.getElementById('remove-1').style.display = 'block';
+            }
+            console.log('Added slot, new count: ' + slotCount);
+        }
+
+        // Remove time slot
+        function removeSlot(slotId) {
+            console.log('Removing slot: ' + slotId);
+            const slot = document.getElementById(`slot-${slotId}`);
+            if (slot) {
+                slot.remove();
+                slotCount--;
+                if (slotCount === 1) {
+                    document.getElementById('remove-1').style.display = 'none';
+                }
+                console.log('Removed slot, new count: ' + slotCount);
+            } else {
+                console.error('Slot not found: slot-' + slotId);
+            }
+        }
+
+        // Log form submission
+        function logSubmit() {
+            console.log('Submitting form with token: ' + document.querySelector('input[name="token"]').value);
+            console.log('Date: ' + document.getElementById('date').value);
+            console.log('DayOfWeek: ' + document.getElementById('dayOfWeek').value);
+            console.log('StartTimes: ' + Array.from(document.getElementsByName('startTimes')).map(input => input.value));
+            console.log('EndTimes: ' + Array.from(document.getElementsByName('endTimes')).map(input => input.value));
+        }
+    </script>
 </body>
 </html>
