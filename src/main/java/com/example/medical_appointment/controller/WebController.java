@@ -51,43 +51,50 @@ public class WebController {
         return "redirect:/";
     }
 
-@GetMapping("/home-doctor")
+
+   @GetMapping("/home-doctor")
     public String homeDoctor(HttpSession session, Model model) {
         try {
             Integer userId = (Integer) session.getAttribute("userId");
             String token = (String) session.getAttribute("accessToken");
 
             if (userId == null || token == null) {
-                model.addAttribute("error", "Utilisateur non authentifié");
+                model.addAttribute("error", "User not authenticated");
+                System.out.println("Unauthorized access to home-doctor: userId or token is null");
                 return "redirect:/login";
             }
 
-            // Appel à /api/users/id/{id} pour récupérer les détails de l'utilisateur
+            // Log the token for debugging
+            System.out.println("Token retrieved from session: " + token);
+
+            // Call /api/users/id/{id} to fetch user details
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + token);
             HttpEntity<Void> request = new HttpEntity<>(headers);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                "http://localhost:8080/api/users/id/" + userId,
-                HttpMethod.GET,
-                request,
-                new ParameterizedTypeReference<>() {}
+                    "http://localhost:8080/api/users/id/" + userId,
+                    HttpMethod.GET,
+                    request,
+                    new ParameterizedTypeReference<>() {}
             );
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> user = response.getBody();
                 model.addAttribute("firstName", user.get("firstName"));
                 model.addAttribute("lastName", user.get("lastName"));
-                model.addAttribute("user", user); // Ajouter l'objet utilisateur complet pour plus de flexibilité
-                System.out.println("Utilisateur récupéré pour home-doctor: " + user);
+                model.addAttribute("user", user);
+                model.addAttribute("token", token); // Pass token to the model
+                System.out.println("User retrieved for home-doctor: " + user);
                 return "home-doctor";
             } else {
-                model.addAttribute("error", "Impossible de récupérer les informations de l'utilisateur");
+                model.addAttribute("error", "Unable to retrieve user information");
+                System.out.println("Failed to retrieve user info for userId: " + userId);
                 return "redirect:/login";
             }
         } catch (Exception e) {
-            model.addAttribute("error", "Erreur : " + e.getMessage());
-            System.out.println("Erreur dans homeDoctor: " + e.getMessage());
+            model.addAttribute("error", "Error: " + e.getMessage());
+            System.out.println("Error in homeDoctor: " + e.getMessage());
             return "redirect:/login";
         }
     }

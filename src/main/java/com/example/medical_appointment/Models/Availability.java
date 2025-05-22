@@ -26,4 +26,5 @@ public class Availability {
 
     @Column(name = "time_slot", nullable = false)
     private String timeSlot;
+    
 }
