@@ -84,7 +84,7 @@
                 </thead>
                 <tbody>
                     <tr th:each="availability : ${availabilities}">
-                        <td th:text="${#dates.format(availability.date, 'yyyy-MM-dd')}"></td>
+                        <td th:text="${#temporals.format(availability.date, 'yyyy-MM-dd')}"></td>
                         <td th:text="${availability.dayOfWeek}"></td>
                         <td th:text="${availability.timeSlot}"></td>
                         <td>

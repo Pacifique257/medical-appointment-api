@@ -35,6 +35,24 @@
         .card-text {
             color: #495057;
         }
+        .btn-primary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        .btn-primary:hover {
+            background-color: gold;
+            border-color: gold;
+            color: #6c757d;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: gold;
+            border-color: gold;
+            color: #6c757d;
+        }
         footer {
             background-color: #6c757d;
             color: gold;
@@ -42,20 +60,28 @@
             text-align: center;
             margin-top: auto;
         }
+        .debug-info {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 <!-- Navbar -->
 <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
-        <a class="navbar-brand" th:text="'Dr. ' + ${user.lastName} + ' ' + ${user.firstName}">Dr. John Doe</a>
+        <a class="navbar-brand" th:text="'Dr. ' + ${user.firstName} + ' ' + ${user.lastName}"></a>
         <button class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse justify-content-end" id="navbarContent">
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link" href="/doctor/profile">My Profile</a>
+                    <a class="nav-link" th:href="@{/doctor/availability(token=${token})}">List of Availabilities</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/doctor/availability/new(token=${token})}">Create Availability</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link text-danger" th:href="@{/logout}">Logout</a>
@@ -70,33 +96,35 @@
     <h2 class="card-title">Edit Availability</h2>
     <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
     <div class="card p-4 shadow-sm">
-        <form th:action="@{/availabilities/update/{id}(id=${availabilityDTO.id})}" th:object="${availabilityDTO}" method="post">
+        <form th:action="@{/doctor/availability/update/{id}(id=${availability.id}, token=${token})}" th:object="${availability}" method="post">
+            <input type="hidden" th:field="*{id}" />
             <div class="mb-3">
                 <label for="date" class="form-label card-text">Availability Date</label>
-                <input type="date" class="form-control" id="date" th:field="*{date}" required/>
+                <input type="date" class="form-control" id="date" name="date" th:value="${availability.date != null ? #temporals.format(availability.date, 'yyyy-MM-dd') : ''}" required />
             </div>
             <div class="mb-3">
                 <label for="dayOfWeek" class="form-label card-text">Day of Week</label>
-                <select class="form-select" id="dayOfWeek" th:field="*{dayOfWeek}" required>
+                <select class="form-select" id="dayOfWeek" name="dayOfWeek" required>
                     <option value="">Select a Day</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                    <option value="Sunday">Sunday</option>
+                    <th:block th:each="day : ${T(java.util.Arrays).asList('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY')}">
+                        <option th:value="${day}" th:text="${day}" th:selected="${availability.dayOfWeek != null and availability.dayOfWeek == day}"></option>
+                    </th:block>
                 </select>
             </div>
             <div class="mb-3">
                 <label for="timeSlot" class="form-label card-text">Availability Time Slot</label>
-                <input type="text" class="form-control" id="timeSlot" th:field="*{timeSlot}" placeholder="e.g., 09:00-10:00" required/>
+                <input type="text" class="form-control" id="timeSlot" th:field="*{timeSlot}" placeholder="e.g., 09:00-10:00" required />
             </div>
-            <button type="submit" class="btn btn-primary" style="background-color: #6c757d; border-color: #6c757d;">Update Availability</button>
-            <a th:href="@{/availabilities}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Update Availability</button>
+            <a th:href="@{/doctor/availability(token=${token})}" class="btn btn-secondary">Cancel</a>
         </form>
-        <a th:href="@{/home-doctor}" class="btn btn-secondary mt-3">Back to Dashboard</a>
-        <a th:href="@{/logout}" class="btn btn-danger mt-3">Logout</a>
+        <!-- Debug Information -->
+        <div class="debug-info">
+            <p>Debug - Raw values from database:</p>
+            <p>Date: <span th:text="${availability.date} ?: 'null'"></span></p>
+            <p>Day of Week: <span th:text="${availability.dayOfWeek} ?: 'null'"></span></p>
+            <p>Time Slot: <span th:text="${availability.timeSlot} ?: 'null'"></span></p>
+        </div>
     </div>
 </div>
 
@@ -108,5 +136,16 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.getElementById('date').addEventListener('change', function() {
+        const dateInput = this.value;
+        if (dateInput) {
+            const date = new Date(dateInput);
+            const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+            const dayOfWeek = days[date.getDay()];
+            document.getElementById('dayOfWeek').value = dayOfWeek;
+        }
+    });
+</script>
 </body>
 </html>
