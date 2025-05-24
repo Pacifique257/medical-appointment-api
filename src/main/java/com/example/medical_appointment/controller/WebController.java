@@ -100,11 +100,54 @@ public class WebController {
     }
 
 
-    @GetMapping("/home-patient")
-    public String homePatient() {
-        return "home-patient";
-    }
+       @GetMapping("/home-patient")
+    public String homePatient(HttpSession session, Model model) {
+        try {
+            Integer userId = (Integer) session.getAttribute("userId");
+            String token = (String) session.getAttribute("accessToken");
 
+            if (userId == null || token == null) {
+                model.addAttribute("error", "User not authenticated");
+                System.out.println("Unauthorized access to home-patient: userId or token is null");
+                return "redirect:/login";
+            }
+
+            // Log the token for debugging
+            System.out.println("Token retrieved from session: " + token);
+
+            // Call /api/users/id/{id} to fetch user details
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + token);
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    "http://localhost:8080/api/users/id/" + userId,
+                    HttpMethod.GET,
+                    request,
+                    new ParameterizedTypeReference<>() {}
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> user = response.getBody();
+                model.addAttribute("firstName", user.get("firstName"));
+                model.addAttribute("lastName", user.get("lastName"));
+                model.addAttribute("user", user);
+                model.addAttribute("token", token); // Pass token to the model
+                System.out.println("User retrieved for home-patient: " + user);
+                return "home-patient";
+            } else {
+                model.addAttribute("error", "Unable to retrieve user information");
+                System.out.println("Failed to retrieve user info for userId: " + userId);
+                return "redirect:/login";
+            }
+        } catch (Exception e) {
+            model.addAttribute("error", "Error: " + e.getMessage());
+            System.out.println("Error in homePatient: " + e.getMessage());
+            return "redirect:/login";
+        }
+    }
+    
+    
     @GetMapping("/home")
     public String homeGeneric() {
         return "home";
@@ -131,33 +174,33 @@ public String loginSubmit(@RequestParam String email, @RequestParam String passw
             Integer userId = (Integer) body.get("userId");
             String role = (String) body.get("role");
 
-            // Stocker dans la session pour Thymeleaf (optionnel)
+            // Store in session for Thymeleaf (optional)
             session.setAttribute("accessToken", token);
             session.setAttribute("userId", userId);
             session.setAttribute("userRole", role);
 
-            // Définir le contexte de sécurité
+            // Set the security context
             List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role));
             UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                     email, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
-            System.out.println("Contexte de sécurité défini pour email: " + email + ", rôle: ROLE_" + role);
+            System.out.println("Security context set for email: " + email + ", role: ROLE_" + role);
 
-            // Rediriger avec le token comme paramètre
+            // Redirect with the token as a parameter
             if ("DOCTOR".equalsIgnoreCase(role)) {
                 return "redirect:/home-doctor?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
             } else if ("PATIENT".equalsIgnoreCase(role)) {
                 return "redirect:/home-patient?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
             } else {
-                model.addAttribute("error", "Rôle utilisateur inconnu : " + role);
+                model.addAttribute("error", "Unknown user role: " + role);
                 return "login";
             }
         } else {
-            model.addAttribute("error", response.getBody() != null ? response.getBody().get("error") : "Échec de la connexion");
+            model.addAttribute("error", response.getBody() != null ? response.getBody().get("error") : "Login failed");
             return "login";
         }
     } catch (Exception e) {
-        model.addAttribute("error", "Échec de la connexion : " + e.getMessage());
+        model.addAttribute("error", "Login failed: " + e.getMessage());
         return "login";
     }
 }
@@ -213,49 +256,49 @@ public String loginSubmit(@RequestParam String email, @RequestParam String passw
     }
 
 @GetMapping("/logout")
-    public String logout(HttpSession session, HttpServletResponse response, HttpServletRequest request, Model model) {
-        try {
-            String token = (String) session.getAttribute("accessToken");
+public String logout(HttpSession session, HttpServletResponse response, HttpServletRequest request, Model model) {
+    try {
+        String token = (String) session.getAttribute("accessToken");
 
-            if (token != null) {
-                // Appeler l'API /api/auth/logout pour mettre le token en liste noire
-                HttpHeaders headers = new HttpHeaders();
-                headers.set("Authorization", "Bearer " + token);
-                HttpEntity<Void> logoutRequest = new HttpEntity<>(headers);
+        if (token != null) {
+            // Call the /api/auth/logout API to blacklist the token
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + token);
+            HttpEntity<Void> logoutRequest = new HttpEntity<>(headers);
 
-                ResponseEntity<Map<String, String>> logoutResponse = restTemplate.exchange(
-                    "http://localhost:8080/api/auth/logout",
-                    HttpMethod.POST,
-                    logoutRequest,
-                    new ParameterizedTypeReference<>() {}
-                );
+            ResponseEntity<Map<String, String>> logoutResponse = restTemplate.exchange(
+                "http://localhost:8080/api/auth/logout",
+                HttpMethod.POST,
+                logoutRequest,
+                new ParameterizedTypeReference<>() {}
+            );
 
-                if (!logoutResponse.getStatusCode().is2xxSuccessful()) {
-                    model.addAttribute("error", "Erreur lors de la déconnexion");
-                    System.out.println("Erreur lors de l'appel à /api/auth/logout: " + logoutResponse.getBody());
-                }
+            if (!logoutResponse.getStatusCode().is2xxSuccessful()) {
+                model.addAttribute("error", "Error during logout");
+                System.out.println("Error while calling /api/auth/logout: " + logoutResponse.getBody());
             }
-
-            // Invalider la session
-            session.invalidate();
-
-            // Supprimer le cookie jwtToken
-            Cookie tokenCookie = new Cookie("jwtToken", null);
-            tokenCookie.setHttpOnly(true);
-            tokenCookie.setSecure(false); // Pour tests locaux sans HTTPS
-            tokenCookie.setPath("/");
-            tokenCookie.setMaxAge(0); // Supprime le cookie
-            response.addCookie(tokenCookie);
-
-            // Effacer le contexte de sécurité
-            SecurityContextHolder.clearContext();
-
-            System.out.println("Déconnexion réussie pour l'utilisateur");
-            return "redirect:/login";
-        } catch (Exception e) {
-            model.addAttribute("error", "Erreur lors de la déconnexion : " + e.getMessage());
-            System.out.println("Erreur dans logout: " + e.getMessage());
-            return "redirect:/login";
         }
+
+        // Invalidate the session
+        session.invalidate();
+
+        // Delete the jwtToken cookie
+        Cookie tokenCookie = new Cookie("jwtToken", null);
+        tokenCookie.setHttpOnly(true);
+        tokenCookie.setSecure(false); // For local testing without HTTPS
+        tokenCookie.setPath("/");
+        tokenCookie.setMaxAge(0); // Deletes the cookie
+        response.addCookie(tokenCookie);
+
+        // Clear the security context
+        SecurityContextHolder.clearContext();
+
+        System.out.println("Logout successful for the user");
+        return "redirect:/login";
+    } catch (Exception e) {
+        model.addAttribute("error", "Error during logout: " + e.getMessage());
+        System.out.println("Error in logout: " + e.getMessage());
+        return "redirect:/login";
     }
+}
 }
