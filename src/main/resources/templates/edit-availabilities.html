@@ -60,11 +60,6 @@
             text-align: center;
             margin-top: auto;
         }
-        .debug-info {
-            color: #6c757d;
-            font-size: 0.9em;
-            margin-top: 10px;
-        }
     </style>
 </head>
 <body>
@@ -98,33 +93,35 @@
     <div class="card p-4 shadow-sm">
         <form th:action="@{/doctor/availability/update/{id}(id=${availability.id}, token=${token})}" th:object="${availability}" method="post">
             <input type="hidden" th:field="*{id}" />
+            
+            <!-- Date -->
             <div class="mb-3">
                 <label for="date" class="form-label card-text">Availability Date</label>
-                <input type="date" class="form-control" id="date" name="date" th:value="${availability.date != null ? #temporals.format(availability.date, 'yyyy-MM-dd') : ''}" required />
+              <input type="date" class="form-control" id="date" name="date"
+       th:value="${#temporals.format(availability.date, 'yyyy-MM-dd')}" required />
+
+<select class="form-select" id="dayOfWeek" name="dayOfWeek" required>
+    <option value="">Select a Day</option>
+    <option value="MONDAY" th:selected="${availability.dayOfWeek == 'MONDAY'}">Monday</option>
+    <option value="TUESDAY" th:selected="${availability.dayOfWeek == 'TUESDAY'}">Tuesday</option>
+    <option value="WEDNESDAY" th:selected="${availability.dayOfWeek == 'WEDNESDAY'}">Wednesday</option>
+    <option value="THURSDAY" th:selected="${availability.dayOfWeek == 'THURSDAY'}">Thursday</option>
+    <option value="FRIDAY" th:selected="${availability.dayOfWeek == 'FRIDAY'}">Friday</option>
+    <option value="SATURDAY" th:selected="${availability.dayOfWeek == 'SATURDAY'}">Saturday</option>
+    <option value="SUNDAY" th:selected="${availability.dayOfWeek == 'SUNDAY'}">Sunday</option>
+</select>
+
             </div>
-            <div class="mb-3">
-                <label for="dayOfWeek" class="form-label card-text">Day of Week</label>
-                <select class="form-select" id="dayOfWeek" name="dayOfWeek" required>
-                    <option value="">Select a Day</option>
-                    <th:block th:each="day : ${T(java.util.Arrays).asList('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY')}">
-                        <option th:value="${day}" th:text="${day}" th:selected="${availability.dayOfWeek != null and availability.dayOfWeek == day}"></option>
-                    </th:block>
-                </select>
-            </div>
+
+            <!-- Time Slot -->
             <div class="mb-3">
                 <label for="timeSlot" class="form-label card-text">Availability Time Slot</label>
                 <input type="text" class="form-control" id="timeSlot" th:field="*{timeSlot}" placeholder="e.g., 09:00-10:00" required />
             </div>
+
             <button type="submit" class="btn btn-primary">Update Availability</button>
             <a th:href="@{/doctor/availability(token=${token})}" class="btn btn-secondary">Cancel</a>
         </form>
-        <!-- Debug Information -->
-        <div class="debug-info">
-            <p>Debug - Raw values from database:</p>
-            <p>Date: <span th:text="${availability.date} ?: 'null'"></span></p>
-            <p>Day of Week: <span th:text="${availability.dayOfWeek} ?: 'null'"></span></p>
-            <p>Time Slot: <span th:text="${availability.timeSlot} ?: 'null'"></span></p>
-        </div>
     </div>
 </div>
 
@@ -136,16 +133,5 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.getElementById('date').addEventListener('change', function() {
-        const dateInput = this.value;
-        if (dateInput) {
-            const date = new Date(dateInput);
-            const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-            const dayOfWeek = days[date.getDay()];
-            document.getElementById('dayOfWeek').value = dayOfWeek;
-        }
-    });
-</script>
 </body>
 </html>

@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith(MockitoExtension.class) // ✅ Ajout essentiel pour que Mockito fonctionne avec JUnit 5
 public class AppointmentServiceTest {
 
     @Mock
@@ -26,8 +26,7 @@ public class AppointmentServiceTest {
     @Mock
     private AvailabilityRepository availabilityRepository;
 
-    @Mock
-   // private EmailService emailService;
+    // @Mock private EmailService emailService; // Tu peux le remettre si nécessaire
 
     @InjectMocks
     private AppointmentService appointmentService;
@@ -36,11 +35,14 @@ public class AppointmentServiceTest {
     public void testCreateAppointment() {
         User patient = new User();
         patient.setRole("PATIENT");
+
         User doctor = new User();
         doctor.setRole("DOCTOR");
         doctor.setConsultationFee(100.0);
+
         Availability availability = new Availability();
         availability.setDoctor(doctor);
+
         Appointment appointment = new Appointment();
         appointment.setPatient(patient);
 
@@ -48,6 +50,7 @@ public class AppointmentServiceTest {
         when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
 
         Appointment result = appointmentService.createAppointment(appointment, 1L);
+
         assertEquals("PENDING", result.getStatus());
         verify(availabilityRepository, times(1)).deleteById(1L);
     }

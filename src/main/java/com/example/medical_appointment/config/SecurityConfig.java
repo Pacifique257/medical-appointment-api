@@ -33,8 +33,9 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/login", "/register", "/api/auth/login", "/api/auth/logout").permitAll()
+                .requestMatchers("/", "/login", "/register", "/api/auth/login", "/api/auth/logout", "/api/users").permitAll()
                 .requestMatchers("/home-doctor", "/availabilities/**", "/doctor/availability/**").hasRole("DOCTOR")
+                .requestMatchers("/profile").hasAnyRole("DOCTOR", "PATIENT")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);

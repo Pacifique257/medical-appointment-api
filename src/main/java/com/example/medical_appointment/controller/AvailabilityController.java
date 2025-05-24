@@ -33,9 +33,9 @@ public class AvailabilityController {
         this.availabilityRepository = availabilityRepository;
     }
 
-    /**
-     * Displays the list of availabilities for the logged-in doctor.
-     */
+
+    //  Displays the list of availabilities for the logged-in doctor.
+
     @GetMapping({"", "/list"})
     public String listAvailabilities(Model model, HttpSession session, @RequestParam(value = "token", required = false) String token) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -66,9 +66,8 @@ public class AvailabilityController {
         return "list-availabilities";
     }
 
-    /**
-     * Displays the form to create a new availability.
-     */
+    // Displays the form to create a new availability.
+
     @GetMapping("/new")
     public String showCreateForm(Model model, HttpSession session, @RequestParam("token") String token) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -90,9 +89,8 @@ public class AvailabilityController {
         return "create-availabilities";
     }
 
-    /**
-     * Handles the submission of a new availability.
-     */
+   //  Handles the submission of a new availability.
+
     @PostMapping("/new")
     public String createAvailability(
             HttpSession session,
@@ -159,9 +157,8 @@ public class AvailabilityController {
         }
     }
 
-    /**
-     * Displays the form to edit an existing availability.
-     */
+    // Displays the form to edit an existing availability.
+
     @GetMapping("/edit/{id}")
     public String editAvailability(@PathVariable("id") Long id, @RequestParam("token") String token, Model model, HttpSession session) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -190,26 +187,7 @@ public class AvailabilityController {
             System.out.println("Attempting to render template: list-availabilities due to error, availabilities size=" + availabilities.size());
             return "list-availabilities";
         }
-        System.out.println("Retrieved availability: id=" + id +
-                ", date=" + (availability.getDate() != null ? availability.getDate() : "null") +
-                ", dayOfWeek=" + (availability.getDayOfWeek() != null ? availability.getDayOfWeek() : "null") +
-                ", timeSlot=" + (availability.getTimeSlot() != null ? availability.getTimeSlot() : "null"));
-        // Check for null values
-        if (availability.getDate() == null) {
-            System.out.println("Warning: date is null for availability id=" + id);
-            model.addAttribute("error", "Availability date is missing");
-            return "list-availabilities";
-        }
-        if (availability.getDayOfWeek() == null) {
-            System.out.println("Warning: dayOfWeek is null for availability id=" + id);
-            model.addAttribute("error", "Availability day of week is missing");
-            return "list-availabilities";
-        }
-        // Verify dayOfWeek consistency
-        String expectedDayOfWeek = availability.getDate().getDayOfWeek().toString();
-        if (!expectedDayOfWeek.equals(availability.getDayOfWeek())) {
-            System.out.println("Warning: dayOfWeek inconsistency for id=" + id + ", database dayOfWeek=" + availability.getDayOfWeek() + ", expected=" + expectedDayOfWeek);
-        }
+        System.out.println("Preparing to render edit-availabilities: id=" + id + ", date=" + availability.getDate() + ", dayOfWeek=" + availability.getDayOfWeek() + ", timeSlot=" + availability.getTimeSlot());
         model.addAttribute("availability", availability);
         model.addAttribute("user", doctor);
         model.addAttribute("token", token);
@@ -217,15 +195,12 @@ public class AvailabilityController {
         return "edit-availabilities";
     }
 
-    /**
-     * Handles the submission of an updated availability.
-     */
+ // Handles the submission of an updated availability.
+
     @PostMapping("/update/{id}")
     public String updateAvailability(
             @PathVariable("id") Long id,
             @RequestParam("token") String token,
-            @RequestParam("date") String date,
-            @RequestParam("dayOfWeek") String dayOfWeek,
             @ModelAttribute("availability") Availability availability,
             Model model,
             HttpSession session
@@ -233,7 +208,7 @@ public class AvailabilityController {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         System.out.println("POST /doctor/availability/update/" + id + " - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
         System.out.println("POST /doctor/availability/update/" + id + " - URL token: " + token);
-        System.out.println("Submitted values: id=" + id + ", date=" + date + ", dayOfWeek=" + dayOfWeek + ", timeSlot=" + availability.getTimeSlot());
+        System.out.println("Submitted availability: id=" + id + ", date=" + availability.getDate() + ", dayOfWeek=" + availability.getDayOfWeek() + ", timeSlot=" + availability.getTimeSlot());
         User doctor = userService.getUserByEmail(userDetails.getUsername());
         String sessionToken = (String) session.getAttribute("accessToken");
         System.out.println("POST /doctor/availability/update/" + id + " - Session token: " + sessionToken);
@@ -258,15 +233,8 @@ public class AvailabilityController {
             return "list-availabilities";
         }
         try {
-            LocalDate parsedDate = LocalDate.parse(date);
-            // Validate dayOfWeek consistency
-            String expectedDayOfWeek = parsedDate.getDayOfWeek().toString();
-            if (!expectedDayOfWeek.equals(dayOfWeek)) {
-                System.out.println("Error: Submitted dayOfWeek=" + dayOfWeek + " does not match date=" + parsedDate + ", expected=" + expectedDayOfWeek);
-                throw new IllegalArgumentException("Day of week does not match the selected date");
-            }
-            existingAvailability.setDate(parsedDate);
-            existingAvailability.setDayOfWeek(dayOfWeek);
+            existingAvailability.setDate(availability.getDate());
+            existingAvailability.setDayOfWeek(availability.getDayOfWeek());
             existingAvailability.setTimeSlot(availability.getTimeSlot());
             // Validate timeSlot format (e.g., "09:00-10:00")
             String[] times = availability.getTimeSlot().split("-");
@@ -278,7 +246,6 @@ public class AvailabilityController {
             availabilityRepository.save(existingAvailability);
             System.out.println("Saved availability: doctor=" + existingAvailability.getDoctor().getEmail() +
                     ", date=" + existingAvailability.getDate() +
-                    ", dayOfWeek=" + existingAvailability.getDayOfWeek() +
                     ", timeSlot=" + existingAvailability.getTimeSlot());
             return "redirect:/doctor/availability?token=" + token;
         } catch (Exception e) {
@@ -291,10 +258,9 @@ public class AvailabilityController {
             return "edit-availabilities";
         }
     }
+    
+ // Handles the deletion of an availability.
 
-    /**
-     * Handles the deletion of an availability.
-     */
     @PostMapping("/delete/{id}")
     public String deleteAvailability(@PathVariable("id") Long id, @RequestParam("token") String token, HttpSession session) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -323,9 +289,7 @@ public class AvailabilityController {
         }
     }
 
-    /**
-     * Helper method to get token from session (adjust as needed).
-     */
+     // Helper method to get token from session (adjust as needed).
     private String getTokenFromSession() {
         return (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
     }
