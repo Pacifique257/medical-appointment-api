@@ -86,7 +86,7 @@
             </div>
             <div th:if="${user.role == 'DOCTOR'}" class="col-md-6 mb-3">
                 <span class="info-label">Consultation Fee:</span>
-                <span class="info-value" th:text="${user.consultationFee != null ? user.consultationFee + ' €' : 'Not specified'}"></span>
+                <span class="info-value" th:text="${user.consultationFee != null ? user.consultationFee + ' Fbu' : 'Not specified'}"></span>
             </div>
             <div th:if="${user.role == 'DOCTOR'}" class="col-md-6 mb-3">
                 <span class="info-label">Biography:</span>
@@ -100,7 +100,8 @@
         </div>
         <!-- Edit button linking to update form -->
         <div class="text-center mt-4">
-            <a th:href="@{/api/users/{id}/edit(id=${user.id})}" class="btn btn-gold">Edit</a>
+            <a th:href="@{/api/users/{id}/edit(id=${user.id}, token=${token})}
+" class="btn btn-gold">Edit</a>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
