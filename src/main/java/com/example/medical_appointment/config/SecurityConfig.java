@@ -38,6 +38,8 @@ public class SecurityConfig {
                 .requestMatchers("/", "/login", "/register", "/api/auth/login", "/api/auth/logout", "/api/users","/uploads/**").permitAll()
                 .requestMatchers("/home-doctor", "/availabilities/**", "/doctor/availability/**").hasRole("DOCTOR")
                 .requestMatchers("/profile/**").hasAnyRole("DOCTOR")
+                .requestMatchers("/api/appointments/create", "/api/appointments/patient").hasRole("PATIENT")
+                .requestMatchers("/api/appointments/doctor").hasRole("DOCTOR")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
