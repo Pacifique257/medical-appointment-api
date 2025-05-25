@@ -26,5 +26,8 @@ public class Availability {
 
     @Column(name = "time_slot", nullable = false)
     private String timeSlot;
+    @OneToOne
+    @JoinColumn(name = "appointment_id") // Column in availabilities table
+    private Appointment appointment; // Null if slot is free
     
 }

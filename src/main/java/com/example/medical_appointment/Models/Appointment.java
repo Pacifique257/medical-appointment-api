@@ -6,39 +6,29 @@ import lombok.Data;
 
 import java.time.LocalDate;
 
-
 @Entity
 @Table(name = "appointments")
 @Data
 public class Appointment {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "patient_id", nullable = false)
+    @JoinColumn(name = "patient_id")
     private User patient;
 
     @ManyToOne
-    @JoinColumn(name = "doctor_id", nullable = false)
+    @JoinColumn(name = "doctor_id")
     private User doctor;
 
-    @Column(name = "appointment_date", nullable = false)
+    @OneToOne
+    @JoinColumn(name = "availability_id")
+    private Availability availability;
+
     private LocalDate appointmentDate;
-
-    @Column(name = "day", nullable = false)
-    private String day;
-
-    @Column(name = "reason")
     private String reason;
-
-    @Column(name = "time_slot", nullable = false)
     private String timeSlot;
-
-    @Column(name = "consultation_fee", nullable = false)
     private Double consultationFee;
-
-    @Column(name = "status", nullable = false)
     private String status;
 }
