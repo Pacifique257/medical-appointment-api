@@ -14,11 +14,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
+import org.springframework.web.servlet.ModelAndView;
 
 
-@Controller
+@RestController
 @RequestMapping("/doctor/availability")
 public class AvailabilityController {
 
@@ -33,11 +32,9 @@ public class AvailabilityController {
         this.availabilityRepository = availabilityRepository;
     }
 
-
-    //  Displays the list of availabilities for the logged-in doctor.
-
+    // Displays the list of availabilities for the logged-in doctor.
     @GetMapping({"", "/list"})
-    public String listAvailabilities(Model model, HttpSession session, @RequestParam(value = "token", required = false) String token) {
+    public ModelAndView listAvailabilities(HttpSession session, @RequestParam(value = "token", required = false) String token) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         System.out.println("GET /doctor/availability - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
         System.out.println("GET /doctor/availability - Authentication: " + (SecurityContextHolder.getContext().getAuthentication() != null ? SecurityContextHolder.getContext().getAuthentication().toString() : "null"));
@@ -47,29 +44,29 @@ public class AvailabilityController {
         System.out.println("Doctor: " + (doctor != null ? doctor.getEmail() + ", role: " + doctor.getRole() : "null"));
         if (doctor == null) {
             System.out.println("Failed to load doctor for email: " + userDetails.getUsername() + ", redirecting to login");
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         if (!"DOCTOR".equals(doctor.getRole())) {
             System.out.println("User is not a DOCTOR, role: " + doctor.getRole() + ", redirecting to login");
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         List<Availability> availabilities = availabilityService.getAvailabilitiesByDoctor(doctor);
         if (availabilities == null) {
             System.out.println("Availabilities is null for doctor: " + doctor.getEmail() + ", setting to empty list");
             availabilities = new ArrayList<>();
         }
-        model.addAttribute("availabilities", availabilities);
-        model.addAttribute("user", doctor);
-        model.addAttribute("token", token != null ? token : getTokenFromSession());
-        System.out.println("Model attributes set: availabilities size=" + availabilities.size() + ", user=" + doctor.getEmail() + ", token=" + model.asMap().get("token"));
+        ModelAndView modelAndView = new ModelAndView("list-availabilities");
+        modelAndView.addObject("availabilities", availabilities);
+        modelAndView.addObject("user", doctor);
+        modelAndView.addObject("token", token != null ? token : getTokenFromSession());
+        System.out.println("Model attributes set: availabilities size=" + availabilities.size() + ", user=" + doctor.getEmail() + ", token=" + modelAndView.getModel().get("token"));
         System.out.println("Attempting to render template: list-availabilities for doctor: " + doctor.getEmail());
-        return "list-availabilities";
+        return modelAndView;
     }
 
     // Displays the form to create a new availability.
-
     @GetMapping("/new")
-    public String showCreateForm(Model model, HttpSession session, @RequestParam("token") String token) {
+    public ModelAndView showCreateForm(HttpSession session, @RequestParam("token") String token) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         System.out.println("GET /doctor/availability/new - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
         User doctor = userService.getUserByEmail(userDetails.getUsername());
@@ -78,23 +75,22 @@ public class AvailabilityController {
         System.out.println("Doctor: " + (doctor != null ? doctor.getEmail() + ", role: " + doctor.getRole() : "null"));
         if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
             System.out.println("Unauthorized access to create availability by email: " + (userDetails != null ? userDetails.getUsername() : "null"));
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         String cleanToken = token.contains(",") ? token.split(",")[0] : token;
         System.out.println("Cleaned token for form: " + cleanToken);
-        model.addAttribute("availability", new Availability());
-        model.addAttribute("user", doctor);
-        model.addAttribute("token", cleanToken);
+        ModelAndView modelAndView = new ModelAndView("create-availabilities");
+        modelAndView.addObject("availability", new Availability());
+        modelAndView.addObject("user", doctor);
+        modelAndView.addObject("token", cleanToken);
         System.out.println("Displaying create availability form for doctor: " + doctor.getEmail());
-        return "create-availabilities";
+        return modelAndView;
     }
-
-   //  Handles the submission of a new availability.
-
+    
+    // Handles the submission of a new availability.
     @PostMapping("/new")
-    public String createAvailability(
+    public ModelAndView createAvailability(
             HttpSession session,
-            Model model,
             @RequestParam("token") String token,
             @RequestParam("date") String date,
             @RequestParam("dayOfWeek") String dayOfWeek,
@@ -112,18 +108,19 @@ public class AvailabilityController {
         System.out.println("UserDetails: " + userDetails.getUsername() + ", Role: " + (doctor != null ? doctor.getRole() : "null"));
         if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
             System.out.println("Unauthorized submission of availability by email: " + userDetails.getUsername());
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         System.out.println("Creating availability for doctor: " + doctor.getEmail() + ", date: " + date + ", dayOfWeek: " + dayOfWeek);
         System.out.println("Start times: " + startTimes);
         System.out.println("End times: " + endTimes);
         try {
             if (startTimes.size() != endTimes.size()) {
-                model.addAttribute("error", "Invalid number of start and end times");
                 System.out.println("Error: Mismatched start and end times");
-                model.addAttribute("user", doctor);
-                model.addAttribute("token", cleanToken);
-                return "create-availabilities";
+                ModelAndView modelAndView = new ModelAndView("create-availabilities");
+                modelAndView.addObject("error", "Invalid number of start and end times");
+                modelAndView.addObject("user", doctor);
+                modelAndView.addObject("token", cleanToken);
+                return modelAndView;
             }
             LocalDate availabilityDate = LocalDate.parse(date);
             for (int i = 0; i < startTimes.size(); i++) {
@@ -132,11 +129,12 @@ public class AvailabilityController {
                     LocalTime.parse(startTimes.get(i));
                     LocalTime.parse(endTimes.get(i));
                 } catch (Exception e) {
-                    model.addAttribute("error", "Invalid time format for slot: " + timeSlot);
                     System.out.println("Error: Invalid time format for slot: " + timeSlot);
-                    model.addAttribute("user", doctor);
-                    model.addAttribute("token", cleanToken);
-                    return "create-availabilities";
+                    ModelAndView modelAndView = new ModelAndView("create-availabilities");
+                    modelAndView.addObject("error", "Invalid time format for slot: " + timeSlot);
+                    modelAndView.addObject("user", doctor);
+                    modelAndView.addObject("token", cleanToken);
+                    return modelAndView;
                 }
                 Availability availability = new Availability();
                 availability.setDoctor(doctor);
@@ -147,20 +145,20 @@ public class AvailabilityController {
             }
             System.out.println("All availabilities created successfully for doctor: " + doctor.getEmail());
             System.out.println("Redirecting with token: " + cleanToken);
-            return "redirect:/doctor/availability?token=" + cleanToken;
+            return new ModelAndView("redirect:/doctor/availability?token=" + cleanToken);
         } catch (Exception e) {
-            model.addAttribute("error", "Error: " + e.getMessage());
             System.out.println("Error in createAvailability: " + e.getMessage());
-            model.addAttribute("user", doctor);
-            model.addAttribute("token", cleanToken);
-            return "create-availabilities";
+            ModelAndView modelAndView = new ModelAndView("create-availabilities");
+            modelAndView.addObject("error", "Error: " + e.getMessage());
+            modelAndView.addObject("user", doctor);
+            modelAndView.addObject("token", cleanToken);
+            return modelAndView;
         }
     }
 
     // Displays the form to edit an existing availability.
-
     @GetMapping("/edit/{id}")
-    public String editAvailability(@PathVariable("id") Long id, @RequestParam("token") String token, Model model, HttpSession session) {
+    public ModelAndView editAvailability(@PathVariable("id") Long id, @RequestParam("token") String token, HttpSession session) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         System.out.println("GET /doctor/availability/edit/" + id + " - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
         System.out.println("GET /doctor/availability/edit/" + id + " - URL token: " + token);
@@ -170,39 +168,39 @@ public class AvailabilityController {
         System.out.println("Doctor: " + (doctor != null ? doctor.getEmail() + ", role: " + doctor.getRole() : "null"));
         if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
             System.out.println("Unauthorized access to edit availability by email: " + (userDetails != null ? userDetails.getUsername() : "null"));
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         Availability availability = availabilityRepository.findById(id).orElse(null);
         if (availability == null || !availability.getDoctor().getEmail().equals(doctor.getEmail())) {
             System.out.println("Error retrieving availability: id=" + id + " not found or not owned by doctor: " + doctor.getEmail());
-            model.addAttribute("error", "Availability not found or you do not have permission to edit it");
-            model.addAttribute("user", doctor);
-            model.addAttribute("token", token);
+            ModelAndView modelAndView = new ModelAndView("list-availabilities");
+            modelAndView.addObject("error", "Availability not found or you do not have permission to edit it");
+            modelAndView.addObject("user", doctor);
+            modelAndView.addObject("token", token);
             List<Availability> availabilities = availabilityService.getAvailabilitiesByDoctor(doctor);
             if (availabilities == null) {
                 System.out.println("Availabilities is null for doctor: " + doctor.getEmail() + ", setting to empty list");
                 availabilities = new ArrayList<>();
             }
-            model.addAttribute("availabilities", availabilities);
+            modelAndView.addObject("availabilities", availabilities);
             System.out.println("Attempting to render template: list-availabilities due to error, availabilities size=" + availabilities.size());
-            return "list-availabilities";
+            return modelAndView;
         }
         System.out.println("Preparing to render edit-availabilities: id=" + id + ", date=" + availability.getDate() + ", dayOfWeek=" + availability.getDayOfWeek() + ", timeSlot=" + availability.getTimeSlot());
-        model.addAttribute("availability", availability);
-        model.addAttribute("user", doctor);
-        model.addAttribute("token", token);
+        ModelAndView modelAndView = new ModelAndView("edit-availabilities");
+        modelAndView.addObject("availability", availability);
+        modelAndView.addObject("user", doctor);
+        modelAndView.addObject("token", token);
         System.out.println("Attempting to render template: edit-availabilities for doctor: " + doctor.getEmail());
-        return "edit-availabilities";
+        return modelAndView;
     }
 
- // Handles the submission of an updated availability.
-
+    // Handles the submission of an updated availability.
     @PostMapping("/update/{id}")
-    public String updateAvailability(
+    public ModelAndView updateAvailability(
             @PathVariable("id") Long id,
             @RequestParam("token") String token,
             @ModelAttribute("availability") Availability availability,
-            Model model,
             HttpSession session
     ) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -215,22 +213,23 @@ public class AvailabilityController {
         System.out.println("Doctor: " + (doctor != null ? doctor.getEmail() + ", role: " + doctor.getRole() : "null"));
         if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
             System.out.println("Unauthorized submission to update availability by email: " + userDetails.getUsername());
-            return "redirect:/login";
+            return new ModelAndView("redirect:/login");
         }
         Availability existingAvailability = availabilityRepository.findById(id).orElse(null);
         if (existingAvailability == null || !existingAvailability.getDoctor().getEmail().equals(doctor.getEmail())) {
             System.out.println("Error retrieving availability: id=" + id + " not found or not owned by doctor: " + doctor.getEmail());
-            model.addAttribute("error", "Availability not found or you do not have permission to update it");
-            model.addAttribute("user", doctor);
-            model.addAttribute("token", token);
+            ModelAndView modelAndView = new ModelAndView("list-availabilities");
+            modelAndView.addObject("error", "Availability not found or you do not have permission to update it");
+            modelAndView.addObject("user", doctor);
+            modelAndView.addObject("token", token);
             List<Availability> availabilities = availabilityService.getAvailabilitiesByDoctor(doctor);
             if (availabilities == null) {
                 System.out.println("Availabilities is null for doctor: " + doctor.getEmail() + ", setting to empty list");
                 availabilities = new ArrayList<>();
             }
-            model.addAttribute("availabilities", availabilities);
+            modelAndView.addObject("availabilities", availabilities);
             System.out.println("Attempting to render template: list-availabilities due to error, availabilities size=" + availabilities.size());
-            return "list-availabilities";
+            return modelAndView;
         }
         try {
             existingAvailability.setDate(availability.getDate());
@@ -247,20 +246,20 @@ public class AvailabilityController {
             System.out.println("Saved availability: doctor=" + existingAvailability.getDoctor().getEmail() +
                     ", date=" + existingAvailability.getDate() +
                     ", timeSlot=" + existingAvailability.getTimeSlot());
-            return "redirect:/doctor/availability?token=" + token;
+            return new ModelAndView("redirect:/doctor/availability?token=" + token);
         } catch (Exception e) {
             System.out.println("Error saving availability: id=" + id + ", error=" + e.getMessage());
-            model.addAttribute("error", "Error updating availability: " + e.getMessage());
-            model.addAttribute("user", doctor);
-            model.addAttribute("token", token);
-            model.addAttribute("availability", existingAvailability);
+            ModelAndView modelAndView = new ModelAndView("edit-availabilities");
+            modelAndView.addObject("error", "Error updating availability: " + e.getMessage());
+            modelAndView.addObject("user", doctor);
+            modelAndView.addObject("token", token);
+            modelAndView.addObject("availability", existingAvailability);
             System.out.println("Attempting to render template: edit-availabilities due to error");
-            return "edit-availabilities";
+            return modelAndView;
         }
     }
-    
- // Handles the deletion of an availability.
 
+    // Handles the deletion of an availability.
     @PostMapping("/delete/{id}")
     public String deleteAvailability(@PathVariable("id") Long id, @RequestParam("token") String token, HttpSession session) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -289,7 +288,7 @@ public class AvailabilityController {
         }
     }
 
-     // Helper method to get token from session (adjust as needed).
+    // Helper method to get token from session (adjust as needed).
     private String getTokenFromSession() {
         return (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
     }
