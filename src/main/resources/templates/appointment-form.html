@@ -50,6 +50,9 @@
         .hidden {
             display: none;
         }
+        .alert {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -57,15 +60,16 @@
     <h2 class="text-center mb-4">Create Appointment</h2>
 
     <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+    <div id="ajax-error" class="alert alert-danger hidden"></div>
 
-    <form th:action="@{/api/appointments/create(token=${token})}" method="post" th:object="${appointmentDTO}">
+    <form id="appointment-form" th:action="@{/api/appointments/create(token=${token})}" method="post" th:object="${appointmentDTO}">
         <input type="hidden" th:field="*{patientId}" id="patientId">
 
         <div class="mb-3">
             <label for="specialtyId" class="form-label">Specialty</label>
             <select id="specialty-select" class="form-select" required>
                 <option value="">Select a Specialty</option>
-                <option th:each="specialty: ${specialties}" th:value="${specialty.id}" th:text="${specialty.name}"></option>
+                <option th:each="specialty : ${specialties}" th:value="${specialty.id}" th:text="${specialty.name}"></option>
             </select>
         </div>
 
@@ -86,7 +90,7 @@
             <select id="timeSlot" class="form-select" th:field="*{timeSlot}" required>
                 <option value="">Select a Time Slot</option>
             </select>
-            <input type="hidden" id="availabilityId" th:field="*{availabilityId}">
+            <input type="hidden" id="availabilityId" th:field="*{availabilityId}" name="availabilityId">
         </div>
 
         <div class="mb-3 hidden" id="consultationFee-container">
@@ -99,18 +103,42 @@
             <textarea id="reason" class="form-control" th:field="*{reason}" rows="4" required></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100">Create Appointment</button>
+        <button type="submit" class="btn btn-primary w-100">Book Appointment</button>
     </form>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
+<script th:inline="javascript">
+    // Initialize JWT token from Thymeleaf context
+    const jwtToken = /*[[${token}]]*/ null;
+    console.log('JWT Token:', jwtToken);
+
+    // Show error message in the form
+    function showAjaxError(message) {
+        const errorDiv = document.getElementById('ajax-error');
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+    }
+
+    // Hide error message
+    function hideAjaxError() {
+        const errorDiv = document.getElementById('ajax-error');
+        errorDiv.classList.add('hidden');
+    }
+
+    // Handle specialty selection
     document.getElementById('specialty-select').addEventListener('change', function() {
         const specialtyId = this.value;
+        hideAjaxError();
         if (specialtyId) {
-            fetch('/api/appointments/doctors?specialtyId=' + specialtyId)
-                .then(response => response.json())
+            console.log('Fetching doctors for specialtyId:', specialtyId);
+            fetch(`/api/appointments/doctors?specialtyId=${specialtyId}&token=${jwtToken}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Failed to fetch doctors: ${response.status}`);
+                    return response.json();
+                })
                 .then(doctors => {
+                    console.log('Doctors received:', doctors);
                     const doctorSelect = document.getElementById('doctorId');
                     doctorSelect.innerHTML = '<option value="">Select a Doctor</option>';
                     doctors.forEach(doctor => {
@@ -121,57 +149,89 @@
                     });
                     document.getElementById('doctor-select-container').classList.remove('hidden');
                 })
-                .catch(error => console.error('Error loading doctors:', error));
+                .catch(error => {
+                    console.error('Error loading doctors:', error);
+                    showAjaxError('Unable to load doctors. Please try again.');
+                });
         } else {
             resetFields();
         }
     });
 
+    // Handle doctor selection
     document.getElementById('doctorId').addEventListener('change', function() {
         const doctorId = this.value;
+        hideAjaxError();
         if (doctorId) {
-            fetch('/api/appointments/dates?doctorId=' + doctorId)
-                .then(response => response.json())
+            console.log('Fetching dates for doctorId:', doctorId);
+            fetch(`/api/appointments/dates?doctorId=${doctorId}&token=${jwtToken}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Failed to fetch dates: ${response.status}`);
+                    return response.json();
+                })
                 .then(dates => {
+                    console.log('Dates received:', dates);
                     const dateInput = document.getElementById('appointmentDate');
                     dateInput.value = '';
                     document.getElementById('date-container').classList.remove('hidden');
                     dateInput.addEventListener('change', function() {
                         loadTimeSlots(doctorId, this.value);
-                    }, { once: true });
+                    });
                 })
-                .catch(error => console.error('Error loading dates:', error));
-            fetch('/api/appointments/fee?doctorId=' + doctorId)
-                .then(response => response.json())
+                .catch(error => {
+                    console.error('Error loading dates:', error);
+                    showAjaxError('Unable to load available dates. Please try again.');
+                });
+
+            console.log('Fetching fee for doctorId:', doctorId);
+            fetch(`/api/appointments/fee?doctorId=${doctorId}&token=${jwtToken}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Failed to fetch fee: ${response.status}`);
+                    return response.json();
+                })
                 .then(fee => {
+                    console.log('Fee received:', fee);
                     const feeInput = document.getElementById('consultationFee');
                     feeInput.value = fee;
                     document.getElementById('consultationFee-container').classList.remove('hidden');
                 })
-                .catch(error => console.error('Error loading fee:', error));
+                .catch(error => {
+                    console.error('Error loading fee:', error);
+                    showAjaxError('Unable to load consultation fee. Please try again.');
+                });
         } else {
             resetFields();
         }
     });
 
+    // Load time slots for selected date
     function loadTimeSlots(doctorId, date) {
+        hideAjaxError();
         if (date) {
-            fetch('/api/appointments/slots?doctorId=' + doctorId + '&date=' + date)
-                .then(response => response.json())
+            console.log('Fetching slots for doctorId:', doctorId, 'date:', date);
+            fetch(`/api/appointments/slots?doctorId=${doctorId}&date=${date}&token=${jwtToken}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Failed to fetch slots: ${response.status}`);
+                    return response.json();
+                })
                 .then(slots => {
+                    console.log('Slots received:', slots);
                     const slotSelect = document.getElementById('timeSlot');
                     slotSelect.innerHTML = '<option value="">Select a Time Slot</option>';
                     slots.forEach(slot => {
                         const option = document.createElement('option');
                         option.value = slot;
-                        // Récupérer dayOfWeek pour cette date et slot
-                        fetch('/api/appointments/availability?doctorId=' + doctorId + '&date=' + date + '&timeSlot=' + encodeURIComponent(slot))
-                            .then(response => response.json())
+                        fetch(`/api/appointments/availability?doctorId=${doctorId}&date=${date}&timeSlot=${encodeURIComponent(slot)}&token=${jwtToken}`)
+                            .then(response => {
+                                if (!response.ok) throw new Error(`Failed to fetch availability: ${response.status}`);
+                                return response.json();
+                            })
                             .then(availability => {
                                 option.text = availability.dayOfWeek + ', ' + slot;
                             })
                             .catch(error => {
                                 option.text = slot;
+                                console.error('Error fetching availability for slot:', slot, error);
                             })
                             .finally(() => {
                                 slotSelect.appendChild(option);
@@ -179,29 +239,45 @@
                     });
                     document.getElementById('time-slot-container').classList.remove('hidden');
                     slotSelect.addEventListener('change', function() {
-                        fetch('/api/appointments/availability?doctorId=' + doctorId + '&date=' + date + '&timeSlot=' + encodeURIComponent(this.value))
+                        hideAjaxError();
+                        console.log('Fetching availability for slot:', this.value);
+                        fetch(`/api/appointments/availability?doctorId=${doctorId}&date=${date}&timeSlot=${encodeURIComponent(this.value)}&token=${jwtToken}`)
                             .then(response => {
-                                if (!response.ok) throw new Error('Availability not found or already taken');
+                                if (!response.ok) {
+                                    let errorMsg = `Failed to fetch availability: ${response.status}`;
+                                    if (response.status === 403) {
+                                        errorMsg = 'Access denied. Please ensure you have permission to select this time slot.';
+                                    } else if (response.status === 404) {
+                                        errorMsg = 'This time slot is not available or already taken.';
+                                    }
+                                    throw new Error(errorMsg);
+                                }
                                 return response.json();
                             })
                             .then(availability => {
                                 document.getElementById('availabilityId').value = availability.id;
-                                console.log('Availability ID set to: ' + availability.id);
+                                console.log('DEBUG: Availability ID set to:', availability.id);
                             })
                             .catch(error => {
-                                alert('Error: ' + error.message);
+                                showAjaxError(error.message);
                                 slotSelect.value = '';
                                 document.getElementById('availabilityId').value = '';
+                                console.error('Error setting availability:', error);
                             });
-                    }, { once: true });
+                    });
                 })
-                .catch(error => console.error('Error loading slots:', error));
+                .catch(error => {
+                    console.error('Error loading slots:', error);
+                    showAjaxError('Unable to load time slots. Please try again.');
+                });
         } else {
             document.getElementById('time-slot-container').classList.add('hidden');
         }
     }
 
+    // Reset form fields
     function resetFields() {
+        hideAjaxError();
         document.getElementById('doctor-select-container').classList.add('hidden');
         document.getElementById('date-container').classList.add('hidden');
         document.getElementById('time-slot-container').classList.add('hidden');
@@ -212,6 +288,15 @@
         document.getElementById('consultationFee').value = '';
         document.getElementById('availabilityId').value = '';
     }
+
+    // Validate form before submission
+    document.getElementById('appointment-form').addEventListener('submit', function(event) {
+        const availabilityId = document.getElementById('availabilityId').value;
+        if (!availabilityId) {
+            event.preventDefault();
+            showAjaxError('Please select a time slot before submitting.');
+        }
+    });
 </script>
 </body>
 </html>

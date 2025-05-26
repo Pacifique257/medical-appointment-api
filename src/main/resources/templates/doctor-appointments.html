@@ -11,25 +11,23 @@
             padding-top: 80px;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
+        }
+        .table {
             background-color: #ffffff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-            border: 2px solid gold;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        h2 {
-            color: #6c757d;
+        .table th, .table td {
+            vertical-align: middle;
         }
-        .btn-primary {
-            background-color: gold;
-            border: none;
-            color: #343a40;
-            font-weight: bold;
+        .btn-success, .btn-primary {
+            font-size: 0.9rem;
+            margin-right: 5px;
         }
-        .btn-primary:hover {
-            background-color: #d4af37;
-            color: #212529;
+        .alert {
+            margin-bottom: 20px;
         }
     </style>
 </head>
@@ -37,28 +35,45 @@
 <div class="container">
     <h2 class="text-center mb-4">My Appointments</h2>
 
-    <table class="table table-bordered">
+    <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+    <table class="table table-striped">
         <thead>
             <tr>
                 <th>Date</th>
+                <th>Day</th>
                 <th>Time</th>
                 <th>Patient</th>
                 <th>Reason</th>
                 <th>Fee</th>
                 <th>Status</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-            <tr th:each="appointment: ${appointments}">
+            <tr th:each="appointment : ${appointments}">
                 <td th:text="${appointment.appointmentDate}"></td>
+                <td th:text="${appointment.day}"></td>
                 <td th:text="${appointment.timeSlot}"></td>
                 <td th:text="${appointment.patient.lastName} + ' ' + ${appointment.patient.firstName}"></td>
                 <td th:text="${appointment.reason}"></td>
                 <td th:text="${appointment.consultationFee}"></td>
                 <td th:text="${appointment.status}"></td>
+                <td>
+                    <form th:if="${appointment.status == 'PENDING'}" 
+                          th:action="@{/api/appointments/confirm/{id}(id=${appointment.id},token=${token})}" 
+                          method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-success btn-sm">Confirm</button>
+                    </form>
+                    <form th:if="${appointment.status == 'CONFIRMED'}" 
+                          th:action="@{/api/appointments/complete/{id}(id=${appointment.id},token=${token})}" 
+                          method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-primary btn-sm">Complete</button>
+                    </form>
+                </td>
             </tr>
-            <tr th:if="${appointments.isEmpty()}">
-                <td colspan="6" class="text-center">No appointments found</td>
+            <tr th:if="${appointments.isEmpty}">
+                <td colspan="8" class="text-center">No appointments found.</td>
             </tr>
         </tbody>
     </table>

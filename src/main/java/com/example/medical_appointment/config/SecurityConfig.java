@@ -35,11 +35,16 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/login", "/register", "/api/auth/login", "/api/auth/logout", "/api/users","/uploads/**").permitAll()
-                .requestMatchers("/home-doctor", "/availabilities/**", "/doctor/availability/**").hasRole("DOCTOR")
-                .requestMatchers("/profile/**").hasAnyRole("DOCTOR")
-                .requestMatchers("/api/appointments/create", "/api/appointments/patient").hasRole("PATIENT")
-                .requestMatchers("/api/appointments/doctor").hasRole("DOCTOR")
+                .requestMatchers("/", "/login", "/register", "/api/auth/login", "/api/auth/logout", "/api/users", "/Uploads/**").permitAll()
+                .requestMatchers("/home-doctor", "/availabilities/**", "/doctor/availability/**", 
+                                 "/api/appointments/doctor", "/api/appointments/confirm/**", 
+                                 "/api/appointments/complete/**","/api/dashboard/doctor").hasRole("DOCTOR")
+                .requestMatchers("/api/appointments/create", "/api/appointments/patient", 
+                                 "/api/appointments/cancel/**","/api/dashboard/patient").hasRole("PATIENT")
+                .requestMatchers("/profile/**").hasAnyRole("DOCTOR", "PATIENT")
+                .requestMatchers("/api/appointments/doctors", "/api/appointments/dates", 
+                                 "/api/appointments/slots", "/api/appointments/fee", 
+                                 "/api/appointments/availability").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
