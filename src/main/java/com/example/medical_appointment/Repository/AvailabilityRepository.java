@@ -16,6 +16,3 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
     Optional<Availability> findByDoctorIdAndDateAndTimeSlotAndAppointmentIsNull(Long doctorId, LocalDate date, String timeSlot);
 
 }
-
-
-  

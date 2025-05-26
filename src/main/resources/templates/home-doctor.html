@@ -87,10 +87,10 @@
     <div class="row">
         <!-- Sidebar -->
         <nav class="col-md-3 col-lg-2 sidebar d-none d-md-block">
-            <a th:href="@{/doctor/dashboard(token=${token})}">Dashboard</a>
+            <a th:href="@{/api/dashboard/doctor(token=${token})}">Dashboard</a>
             <a th:href="@{/doctor/availability/new(token=${token})}">Create Availability</a>
             <a th:href="@{/doctor/availability/list(token=${token})}">List of Availabilities</a>
-            <a th:href="@{/doctor/appointments(token=${token})}">Appointments</a>
+            <a th:href="@{/api/appointments/doctor(token=${token})}">Appointments</a>
         </nav>
 
         <!-- Main Content -->
@@ -99,7 +99,7 @@
 
             <div class="row g-4">
                 <div class="col-md-6">
-                    <a th:href="@{/doctor/dashboard(token=${token})}" class="text-decoration-none">
+                    <a th:href="@{/api/dashboard/doctor(token=${token})}" class="text-decoration-none">
                         <div class="card p-4 shadow-sm">
                             <h4 class="card-title">Dashboard</h4>
                             <p class="card-text">View your activity overview, appointments summary, and quick stats.</p>
@@ -123,7 +123,7 @@
                     </a>
                 </div>
                 <div class="col-md-6">
-                    <a th:href="@{/doctor/appointments(token=${token})}" class="text-decoration-none">
+                    <a th:href="@{/api/appointments/doctor(token=${token})}" class="text-decoration-none">
                         <div class="card p-4 shadow-sm">
                             <h4 class="card-title">Appointments</h4>
                             <p class="card-text">View and manage all your patient appointments in one place.</p>

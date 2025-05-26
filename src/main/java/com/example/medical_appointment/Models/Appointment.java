@@ -27,8 +27,14 @@ public class Appointment {
     private Availability availability;
 
     private LocalDate appointmentDate;
-    private String reason;
+
+    // Add day field to match the database column
+    @Column(name = "day", nullable = false)
+    private String day;
+
     private String timeSlot;
+    private String reason;
     private Double consultationFee;
-    private String status;
+   @Column(nullable = false)
+   private String status; // PENDING, CONFIRMED, CANCELLED, COMPLETED
 }
