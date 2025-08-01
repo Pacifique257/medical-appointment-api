@@ -5,121 +5,171 @@ import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.Repository.SpecialtyRepository;
 import com.example.medical_appointment.Repository.UserRepository;
 import com.example.medical_appointment.dto.UserDTO;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.UUID;
-import java.nio.file.Path; // ✅ Correct
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.nio.file.Paths;
 
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Base64;
 
 @Service
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
-    private final SpecialtyRepository specialtyRepository;
-    // Base path for storing uploaded files
-    private static final String UPLOAD_DIR = "src/main/resources/static/uploads/";
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
-    public UserService(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder, SpecialtyRepository specialtyRepository) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.specialtyRepository = specialtyRepository;
+    private SpecialtyRepository specialtyRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB en octets
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public void createUser(@Valid UserDTO userDTO) {
+        // Restreindre la création d'ADMIN via l'endpoint public
+        if ("ADMIN".equals(userDTO.getRole())) {
+            throw new IllegalArgumentException("Le rôle ADMIN ne peut pas être créé via l'inscription publique");
+        }
+        createUserInternal(userDTO);
     }
 
-    public User createUser(User user) {
-        if (userRepository.findByEmail(user.getEmail()) != null) {
-            throw new IllegalArgumentException("Email already exists");
+    public void createInitialAdminUser(@Valid UserDTO userDTO) {
+        // Vérifier qu'aucun compte admin n'existe
+        List<User> admins = userRepository.findAll().stream()
+                .filter(user -> "ADMIN".equals(user.getRole()))
+                .toList();
+        if (!admins.isEmpty()) {
+            throw new IllegalArgumentException("Un compte admin existe déjà. Utilisez l'endpoint /api/v1/users pour créer d'autres admins.");
         }
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        return userRepository.save(user);
+
+        // Forcer le rôle à ADMIN
+        userDTO.setRole("ADMIN");
+        createUserInternal(userDTO);
+    }
+
+    public void createAdminUser(@Valid UserDTO userDTO) {
+        createUserInternal(userDTO);
+    }
+
+    private void createUserInternal(@Valid UserDTO userDTO) {
+        User user = new User();
+        user.setFirstName(userDTO.getFirstName());
+        user.setLastName(userDTO.getLastName());
+        user.setEmail(userDTO.getEmail());
+        user.setPhone(userDTO.getPhone());
+        try {
+            user.setBirthDate(userDTO.getBirthDate() != null ? LocalDate.parse(userDTO.getBirthDate(), DATE_FORMATTER) : null);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Format de date invalide. Utilisez yyyy-MM-dd (ex. 1990-01-01)");
+        }
+        user.setAddress(userDTO.getAddress());
+        user.setConsultationFee(userDTO.getConsultationFee());
+        user.setBiography(userDTO.getBiography());
+        user.setGender(userDTO.getGender());
+        user.setRole(userDTO.getRole());
+        user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+
+        if ("DOCTOR".equals(userDTO.getRole()) && userDTO.getSpecialtyId() != null) {
+            Specialty specialty = specialtyRepository.findById(userDTO.getSpecialtyId())
+                    .orElseThrow(() -> new IllegalArgumentException("Spécialité non trouvée"));
+            user.setSpecialty(specialty);
+        }
+
+        MultipartFile image = userDTO.getProfilePictureFile();
+        if (image != null && !image.isEmpty()) {
+            if (image.getSize() > MAX_FILE_SIZE) {
+                throw new IllegalArgumentException("La taille de la photo de profil ne doit pas dépasser 5 Mo");
+            }
+            try {
+                byte[] bytes = image.getBytes();
+                String base64Image = Base64.getEncoder().encodeToString(bytes);
+                user.setProfilePicture(base64Image);
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Erreur lors de la lecture du fichier de la photo de profil", e);
+            }
+        }
+
+        if (userRepository.findByEmail(userDTO.getEmail()) != null) {
+            throw new IllegalArgumentException("Un utilisateur avec cet email existe déjà");
+        }
+
+        userRepository.save(user);
+    }
+
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé"));
+    }
+
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
     }
 
     public User getUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
-    public User getUserById(Long id) {
-        return userRepository.findById(id).orElse(null);
-    }
+    public void updateUser(Long id, UserDTO userDTO, String role) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé"));
 
-    // Updates user details based on role
-    public User updateUser(Long userId, UserDTO userDTO, String userRole) {
-        System.out.println("UserService.updateUser - Updating user ID: " + userId + ", role: " + userRole);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
-        System.out.println("UserService.updateUser - Found user: " + user.getEmail());
-
-        if (!user.getRole().equalsIgnoreCase(userRole)) {
-            throw new IllegalArgumentException("Role mismatch for user ID: " + userId);
+        // Restreindre la modification du rôle à ADMIN
+        if (!role.equals("ADMIN") && !userDTO.getRole().equals(user.getRole())) {
+            throw new IllegalArgumentException("Seul un ADMIN peut modifier le rôle d'un utilisateur");
         }
 
-        if ("DOCTOR".equalsIgnoreCase(userRole)) {
-            if (userDTO.getConsultationFee() != null) {
-                user.setConsultationFee(userDTO.getConsultationFee());
-                System.out.println("UserService.updateUser - Updated consultationFee: " + userDTO.getConsultationFee());
-            }
-            if (userDTO.getBiography() != null) {
-                user.setBiography(userDTO.getBiography());
-                System.out.println("UserService.updateUser - Updated biography: " + userDTO.getBiography());
-            }
-            if (userDTO.getSpecialtyId() != null) {
-                Specialty specialty = specialtyRepository.findById(userDTO.getSpecialtyId())
-                        .orElseThrow(() -> new IllegalArgumentException("Specialty not found with ID: " + userDTO.getSpecialtyId()));
-                user.setSpecialty(specialty);
-                System.out.println("UserService.updateUser - Updated specialty: " + specialty.getName());
-            } else if (userDTO.getSpecialtyId() == null && userDTO.getConsultationFee() != null) {
-                user.setSpecialty(null);
-                System.out.println("UserService.updateUser - Removed specialty");
-            }
-            if (userDTO.getProfilePictureFile() != null && !userDTO.getProfilePictureFile().isEmpty()) {
-                System.out.println("UserService.updateUser - Processing profile picture: " + userDTO.getProfilePictureFile().getOriginalFilename());
-                String filePath = saveProfilePicture(userDTO.getProfilePictureFile());
-                user.setProfilePicture(filePath);
-                System.out.println("UserService.updateUser - Updated profile picture path: " + filePath);
-            }
-        } else if ("PATIENT".equalsIgnoreCase(userRole)) {
-            if (userDTO.getProfilePictureFile() != null && !userDTO.getProfilePictureFile().isEmpty()) {
-                System.out.println("UserService.updateUser - Processing profile picture: " + userDTO.getProfilePictureFile().getOriginalFilename());
-                String filePath = saveProfilePicture(userDTO.getProfilePictureFile());
-                user.setProfilePicture(filePath);
-                System.out.println("UserService.updateUser - Updated profile picture path: " + filePath);
-            }
-        } else {
-            throw new IllegalArgumentException("Invalid role: " + userRole);
+        user.setFirstName(userDTO.getFirstName());
+        user.setLastName(userDTO.getLastName());
+        user.setEmail(userDTO.getEmail());
+        user.setPhone(userDTO.getPhone());
+        try {
+            user.setBirthDate(userDTO.getBirthDate() != null ? LocalDate.parse(userDTO.getBirthDate(), DATE_FORMATTER) : null);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Format de date invalide. Utilisez yyyy-MM-dd (ex. 1990-01-01)");
+        }
+        user.setAddress(userDTO.getAddress());
+        user.setConsultationFee(userDTO.getConsultationFee());
+        user.setBiography(userDTO.getBiography());
+        user.setGender(userDTO.getGender());
+        user.setRole(userDTO.getRole());
+        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         }
 
-        User updatedUser = userRepository.save(user);
-        System.out.println("UserService.updateUser - User saved successfully: " + updatedUser.getEmail());
-        return updatedUser;
+        if ("DOCTOR".equals(userDTO.getRole()) && userDTO.getSpecialtyId() != null) {
+            Specialty specialty = specialtyRepository.findById(userDTO.getSpecialtyId())
+                    .orElseThrow(() -> new IllegalArgumentException("Spécialité non trouvée"));
+            user.setSpecialty(specialty);
+        }
+
+        MultipartFile image = userDTO.getProfilePictureFile();
+        if (image != null && !image.isEmpty()) {
+            if (image.getSize() > MAX_FILE_SIZE) {
+                throw new IllegalArgumentException("La taille de la photo de profil ne doit pas dépasser 5 Mo");
+            }
+            try {
+                byte[] bytes = image.getBytes();
+                String base64Image = Base64.getEncoder().encodeToString(bytes);
+                user.setProfilePicture(base64Image);
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Erreur lors de la lecture du fichier de la photo de profil", e);
+            }
+        }
+
+        userRepository.save(user);
     }
 
-public String saveProfilePicture(MultipartFile file) {
-    if (file == null || file.isEmpty()) {
-        System.out.println("UserService.saveProfilePicture - No file provided");
-        return null;
-    }
-    long maxSize = 15 * 1024 * 1024; // 15 MB
-    if (file.getSize() > maxSize) {
-        System.out.println("UserService.saveProfilePicture - File size exceeds 15MB: " + file.getSize());
-        throw new IllegalArgumentException("File size exceeds 15MB");
-    }
-    try {
-        String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-        Path path = Paths.get("src/main/resources/static/uploads/" + fileName);
-        Files.createDirectories(path.getParent());
-        Files.write(path, file.getBytes());
-        String filePath = "/uploads/" + fileName;
-        System.out.println("UserService.saveProfilePicture - File saved: " + filePath);
-        return filePath;
-    } catch (IOException e) {
-        System.out.println("UserService.saveProfilePicture - Failed to save file: " + e.getMessage());
-        throw new IllegalArgumentException("Failed to save file: " + e.getMessage());
+    public void deleteUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé"));
+        userRepository.delete(user);
     }
 }
-}  

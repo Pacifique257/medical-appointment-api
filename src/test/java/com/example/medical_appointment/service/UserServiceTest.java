@@ -1,91 +1,71 @@
-//package com.example.medical_appointment.service;
-//
-//
-//import com.example.medical_appointment.Models.User;
-//import com.example.medical_appointment.Repository.UserRepository;
-//import java.time.LocalDate;
-//import org.junit.jupiter.api.BeforeEach;
-//import org.junit.jupiter.api.Test;
-//import org.junit.jupiter.api.extension.ExtendWith;
-//import org.mockito.InjectMocks;
-//import org.mockito.Mock;
-//import org.mockito.junit.jupiter.MockitoExtension;
-//import static org.junit.jupiter.api.Assertions.*;
-//import static org.mockito.ArgumentMatchers.any;
-//import static org.mockito.Mockito.*;
-//import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-//
-//
-//@ExtendWith(MockitoExtension.class)
-//class UserServiceTest {
-//
-//    @Mock
-//    private UserRepository userRepository;
-//
-//    @Mock
-//    private BCryptPasswordEncoder passwordEncoder;
-//
-//    @InjectMocks
-//    private UserService userService;
-//    private User user;
-//
-//    @BeforeEach
-//    void setUp() {
-//        user = new User();
-//        user.setLastName("Doe");
-//        user.setFirstName("John");
-//        user.setEmail("john.doe@example.com");
-//        user.setRole("PATIENT");
-//        user.setPhone("+1234567890");
-//        user.setBirthDate(LocalDate.of(1990, 1, 1));
-//        user.setPassword("password");
-//    }
-//
-//    @Test
-//    void testCreateUserSuccess() {
-//        when(userRepository.findByEmail(user.getEmail())).thenReturn(null);
-//        when(passwordEncoder.encode("password")).thenReturn("encodedPassword");
-//        when(userRepository.save(any(User.class))).thenReturn(user);
-//
-//        User createdUser = userService.createUser(user);
-//
-//        assertNotNull(createdUser);
-//        assertEquals("john.doe@example.com", createdUser.getEmail());
-//        assertEquals("encodedPassword", createdUser.getPassword());
-//        verify(passwordEncoder, times(1)).encode("password");
-//        verify(userRepository, times(1)).save(any(User.class));
-//    }
-//
-//    @Test
-//    void testCreateUserEmailExists() {
-//        when(userRepository.findByEmail(user.getEmail())).thenReturn(user);
-//
-//        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-//            userService.createUser(user);
-//        });
-//        assertEquals("Email already exists", exception.getMessage());
-//        verify(passwordEncoder, never()).encode(anyString());
-//        verify(userRepository, never()).save(any(User.class));
-//    }
-//
-//    @Test
-//    void testGetUserByEmailFound() {
-//        when(userRepository.findByEmail("john.doe@example.com")).thenReturn(user);
-//
-//        User foundUser = userService.getUserByEmail("john.doe@example.com");
-//
-//        assertNotNull(foundUser);
-//        assertEquals("john.doe@example.com", foundUser.getEmail());
-//        verify(userRepository, times(1)).findByEmail("john.doe@example.com");
-//    }
-//
-//    @Test
-//    void testGetUserByEmailNotFound() {
-//        when(userRepository.findByEmail("unknown@example.com")).thenReturn(null);
-//
-//        User foundUser = userService.getUserByEmail("unknown@example.com");
-//
-//        assertNull(foundUser);
-//        verify(userRepository, times(1)).findByEmail("unknown@example.com");
-//    }
-//}
+package com.example.medical_appointment.service;
+
+import com.example.medical_appointment.Models.User;
+import com.example.medical_appointment.Repository.UserRepository;
+import com.example.medical_appointment.dto.UserDTO;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import java.util.Collections;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+class UserServiceTest {
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @InjectMocks
+    private UserService userService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void createInitialAdminUser_Success() {
+        UserDTO userDTO = new UserDTO();
+        userDTO.setFirstName("Super");
+        userDTO.setLastName("Admin");
+        userDTO.setEmail("admin@example.com");
+        userDTO.setRole("ADMIN");
+        userDTO.setPhone("+1234567890");
+        userDTO.setBirthDate("1980-01-01");
+        userDTO.setPassword("admin123");
+
+        when(userRepository.findAll()).thenReturn(Collections.emptyList());
+        when(passwordEncoder.encode(any(String.class))).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertDoesNotThrow(() -> userService.createInitialAdminUser(userDTO));
+
+        User savedUser = new User();
+        savedUser.setEmail("admin@example.com");
+        savedUser.setRole("ADMIN");
+        assertEquals("ADMIN", savedUser.getRole());
+    }
+
+    @Test
+    void createInitialAdminUser_AlreadyExists() {
+        UserDTO userDTO = new UserDTO();
+        userDTO.setEmail("admin@example.com");
+
+        User existingAdmin = new User();
+        existingAdmin.setRole("ADMIN");
+
+        when(userRepository.findAll()).thenReturn(Collections.singletonList(existingAdmin));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> userService.createInitialAdminUser(userDTO));
+        assertEquals("Un compte admin existe déjà. Utilisez l'endpoint /api/v1/users pour créer d'autres admins.", exception.getMessage());
+    }
+}

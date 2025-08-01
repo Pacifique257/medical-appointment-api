@@ -1,251 +1,252 @@
 package com.example.medical_appointment.controller;
 
-import com.example.medical_appointment.Models.Specialty;
 import com.example.medical_appointment.Models.User;
-import com.example.medical_appointment.Repository.SpecialtyRepository;
 import com.example.medical_appointment.dto.UserDTO;
 import com.example.medical_appointment.service.UserService;
-import jakarta.servlet.http.HttpSession;
-import java.util.List;
-import java.util.Map;
-import org.springframework.web.bind.annotation.*;
+import io.github.bucket4j.Bucket;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.ui.Model;
-import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/v1/users")
 public class UserController {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
     private final UserService userService;
-    private final SpecialtyRepository specialtyRepository;
+    private final Bucket rateLimitBucket;
 
     @Autowired
-    public UserController(UserService userService,SpecialtyRepository specialtyRepository) {
+    public UserController(UserService userService, Bucket rateLimitBucket) {
         this.userService = userService;
-        this.specialtyRepository = specialtyRepository;
+        this.rateLimitBucket = rateLimitBucket;
+    }
+
+    @PostMapping(value = "/register", consumes = "application/json")
+    public ResponseEntity<?> registerUser(@Valid @RequestBody UserDTO userDTO) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour l'inscription d'utilisateur");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
+        }
+        logger.info("Inscription de l'utilisateur : {}", userDTO.getEmail());
+        try {
+            userService.createUser(userDTO);
+            logger.info("Utilisateur inscrit avec succès : {}", userDTO.getEmail());
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Utilisateur inscrit avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de l'inscription de l'utilisateur : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/admin/register", consumes = "application/json")
+    public ResponseEntity<?> registerInitialAdmin(@Valid @RequestBody UserDTO userDTO) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour l'inscription d'un admin initial");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
+        }
+        logger.info("Inscription de l'admin initial : {}", userDTO.getEmail());
+        try {
+            userService.createInitialAdminUser(userDTO);
+            logger.info("Admin initial inscrit avec succès : {}", userDTO.getEmail());
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Admin initial créé avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de l'inscription de l'admin initial : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping(consumes = "application/json")
-    public ResponseEntity<?> createUser(@RequestBody UserDTO userDTO) {
-        System.out.println(">>> createUser called");
-        try {
-            User user = new User();
-            user.setLastName(userDTO.getLastName());
-            user.setFirstName(userDTO.getFirstName());
-            user.setEmail(userDTO.getEmail());
-            user.setRole(userDTO.getRole());
-            user.setPhone(userDTO.getPhone());
-            user.setBirthDate(userDTO.getBirthDate());
-            user.setAddress(userDTO.getAddress());
-            user.setConsultationFee(userDTO.getConsultationFee());
-            user.setBiography(userDTO.getBiography());
-            user.setGender(userDTO.getGender());
-            user.setProfilePicture(userDTO.getProfilePicture());
-            user.setPassword(userDTO.getPassword());
-
-            if (userDTO.getSpecialtyId() != null) {
-                Specialty specialty = new Specialty();
-                specialty.setId(userDTO.getSpecialtyId());
-                user.setSpecialty(specialty);
-            }
-
-            User createdUser = userService.createUser(user);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    public ResponseEntity<?> createUser(@Valid @RequestBody UserDTO userDTO) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour la création d'utilisateur");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-    }
-
-// Display the update form
-@GetMapping("/{id}/edit")
-    public ModelAndView showUpdateForm(@PathVariable Long id, HttpSession session, @RequestParam(value = "token", required = false) String token) {
-        System.out.println("GET /api/users/" + id + "/edit - Starting request processing");
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        System.out.println("GET /api/users/" + id + "/edit - Authentication: " + (authentication != null ? authentication.toString() : "null"));
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /api/users/" + id + "/edit - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié pour la création d'utilisateur");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
         }
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        System.out.println("GET /api/users/" + id + "/edit - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
-
         User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
-        System.out.println("GET /api/users/" + id + "/edit - Authenticated user: " + (authenticatedUser != null ? authenticatedUser.getEmail() + ", role: " + authenticatedUser.getRole() : "null"));
-        if (authenticatedUser == null || !authenticatedUser.getId().equals(id)) {
-            System.out.println("GET /api/users/" + id + "/edit - Unauthorized access by email: " + (userDetails != null ? userDetails.getUsername() : "null"));
-            return new ModelAndView("redirect:/login");
+        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut créer des utilisateurs"));
         }
 
-        User user = userService.getUserById(id);
-        if (user == null) {
-            System.out.println("GET /api/users/" + id + "/edit - User not found, id: " + id);
-            return new ModelAndView("error");
+        logger.info("Création de l'utilisateur : {}", userDTO.getEmail());
+        try {
+            userService.createAdminUser(userDTO);
+            logger.info("Utilisateur créé avec succès : {}", userDTO.getEmail());
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Utilisateur créé avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de la création de l'utilisateur : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         }
-        System.out.println("GET /api/users/" + id + "/edit - Found user: " + user.getEmail() + ", role: " + user.getRole());
-
-        UserDTO userDTO = new UserDTO();
-        userDTO.setProfilePicture(user.getProfilePicture());
-        userDTO.setConsultationFee(user.getConsultationFee());
-        userDTO.setBiography(user.getBiography());
-        userDTO.setSpecialtyId(user.getSpecialty() != null ? user.getSpecialty().getId() : null);
-        System.out.println("GET /api/users/" + id + "/edit - UserDTO created: biography=" + userDTO.getBiography() + ", consultationFee=" + userDTO.getConsultationFee());
-
-        ModelAndView modelAndView = new ModelAndView("update-user");
-        modelAndView.addObject("userDTO", userDTO);
-        modelAndView.addObject("userId", id);
-        modelAndView.addObject("userRole", user.getRole());
-        System.out.println("GET /api/users/" + id + "/edit - Model attributes set: userId=" + id + ", userRole=" + user.getRole());
-
-        if ("DOCTOR".equalsIgnoreCase(user.getRole())) {
-            List<Specialty> specialties = specialtyRepository.findAll();
-            modelAndView.addObject("specialties", specialties);
-            System.out.println("GET /api/users/" + id + "/edit - Specialties added to model, count: " + specialties.size());
-        }
-
-        String sessionToken = (String) session.getAttribute("accessToken");
-        modelAndView.addObject("token", token != null ? token : sessionToken);
-        System.out.println("GET /api/users/" + id + "/edit - Session token: " + sessionToken + ", URL token: " + token);
-        System.out.println("GET /api/users/" + id + "/edit - Attempting to render template: update-user for user id: " + id);
-
-        return modelAndView;
     }
 
-    // Update user details with file upload
-@PostMapping(value = "/{id}", consumes = "multipart/form-data")
-public ModelAndView updateUser(@PathVariable Long id, @ModelAttribute UserDTO userDTO, HttpSession session, @RequestParam(value = "token", required = false) String token) {
-    System.out.println("POST /api/users/" + id + " - Starting updateUser for ID: " + id);
-    System.out.println("POST /api/users/" + id + " - Received token from URL: " + token);
-
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    System.out.println("POST /api/users/" + id + " - Authentication: " + (authentication != null ? authentication.toString() : "null"));
-    if (authentication == null || !authentication.isAuthenticated() || 
-        authentication.getPrincipal().equals("anonymousUser")) {
-        System.out.println("POST /api/users/" + id + " - User not authenticated, redirecting to login");
-        return new ModelAndView("redirect:/login");
-    }
-
-    UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-    System.out.println("POST /api/users/" + id + " - UserDetails username: " + (userDetails != null ? userDetails.getUsername() : "null"));
-
-    User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
-    System.out.println("POST /api/users/" + id + " - Authenticated user: " + (authenticatedUser != null ? authenticatedUser.getEmail() + ", role: " + authenticatedUser.getRole() : "null"));
-    if (authenticatedUser == null || !authenticatedUser.getId().equals(id)) {
-        System.out.println("POST /api/users/" + id + " - Unauthorized access by email: " + (userDetails != null ? userDetails.getUsername() : "null"));
-        return new ModelAndView("redirect:/login");
-    }
-
-    try {
-        User existingUser = userService.getUserById(id);
-        if (existingUser == null) {
-            System.out.println("POST /api/users/" + id + " - User not found, id: " + id);
-            return new ModelAndView("error");
-        }
-        System.out.println("POST /api/users/" + id + " - Found existing user: " + existingUser.getEmail() + ", role: " + existingUser.getRole());
-        System.out.println("POST /api/users/" + id + " - Profile picture file: " + (userDTO.getProfilePictureFile() != null ? userDTO.getProfilePictureFile().getOriginalFilename() : "none"));
-
-        String userRole = existingUser.getRole();
-        userService.updateUser(id, userDTO, userRole);
-        System.out.println("POST /api/users/" + id + " - User updated successfully, redirecting to profile");
-        // Rediriger avec le token
-        return new ModelAndView("redirect:/api/users/profile?token=" + token);
-    } catch (IllegalArgumentException e) {
-        System.out.println("POST /api/users/" + id + " - Error updating user: " + e.getMessage());
-        ModelAndView modelAndView = new ModelAndView("error");
-        modelAndView.addObject("error", "Error: " + e.getMessage());
-        modelAndView.addObject("user", authenticatedUser);
-        modelAndView.addObject("token", token);
-        System.out.println("POST /api/users/" + id + " - Rendering error template with message: " + e.getMessage());
-        return modelAndView;
-    }
-}
-
-    // Display user profile
     @GetMapping("/{id}")
-    public String showProfile(@PathVariable Long id, Model model) {
-        User user = userService.getUserById(id);
-        if (user == null) {
-            return "error"; // Assumes an error.html page exists
+    public ResponseEntity<?> getUserById(@PathVariable Long id) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour la récupération de l'utilisateur ID : {}", id);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-        model.addAttribute("user", user);
-        return "profile";
-    }        
-    
- @GetMapping("/profile")
-public ModelAndView showProfile(@RequestParam(value = "token", required = false) String token) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /profile - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
         }
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        System.out.println("GET /profile - UserDetails: " + userDetails.getUsername());
-
-        User user = userService.getUserByEmail(userDetails.getUsername());
-        if (user == null) {
-            System.out.println("GET /profile - User not found, email: " + userDetails.getUsername());
-            return new ModelAndView("error");
+        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
+        if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
         }
 
-        UserDTO userDTO = new UserDTO();
-        userDTO.setId(user.getId()); // Ajout de l'ID
-        userDTO.setLastName(user.getLastName());
-        userDTO.setFirstName(user.getFirstName());
-        userDTO.setEmail(user.getEmail());
-        userDTO.setRole(user.getRole());
-        userDTO.setPhone(user.getPhone());
-        userDTO.setBirthDate(user.getBirthDate());
-        userDTO.setAddress(user.getAddress());
-        userDTO.setGender(user.getGender());
-        userDTO.setProfilePicture(user.getProfilePicture());
-        userDTO.setBiography(user.getBiography());
-        userDTO.setConsultationFee(user.getConsultationFee());
-
-        if (user.getSpecialty() != null) {
-            userDTO.setSpecialtyId(user.getSpecialty().getId());
-            userDTO.setSpecialtyName(user.getSpecialty().getName());
+        try {
+            User user = userService.getUserById(id);
+            logger.info("Utilisateur récupéré avec succès : ID {}", id);
+            return ResponseEntity.ok(user);
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de la récupération de l'utilisateur : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         }
-
-        ModelAndView modelAndView = new ModelAndView("profile");
-        modelAndView.addObject("user", userDTO);
-        modelAndView.addObject("token", token);
-
-        System.out.println("GET /profile - Profile loaded for: " + user.getEmail());
-        System.out.println("ModelAndView attributes: " + modelAndView.getModel());
-
-        return modelAndView;
     }
 
-
-
-    @GetMapping("/id/{id}")
-    public ResponseEntity<?> getUserById(@PathVariable Long id) {
-        User user = userService.getUserById(id);
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found"));
+    @GetMapping
+    public ResponseEntity<?> getAllUsers() {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour la récupération de tous les utilisateurs");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-        return ResponseEntity.ok(user);
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
+        }
+
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
+        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut lister tous les utilisateurs"));
+        }
+
+        try {
+            List<User> users = userService.getAllUsers();
+            logger.info("Liste des utilisateurs récupérée avec succès");
+            return ResponseEntity.ok(users);
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de la récupération des utilisateurs : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
     }
 
-    @GetMapping("/email/{email}")
-    public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
-        User user = userService.getUserByEmail(email);
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found"));
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody UserDTO userDTO) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour la mise à jour de l'utilisateur ID : {}", id);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-        return ResponseEntity.ok(user);
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
+        }
+
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
+        if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
+        }
+
+        try {
+            userService.updateUser(id, userDTO, authenticatedUser.getRole());
+            logger.info("Utilisateur mis à jour avec succès : {}", userDTO.getEmail());
+            return ResponseEntity.ok(Map.of("message", "Utilisateur mis à jour avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de la mise à jour de l'utilisateur : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour la suppression de l'utilisateur ID : {}", id);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
+        }
+
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
+        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut supprimer des utilisateurs"));
+        }
+
+        try {
+            userService.deleteUser(id);
+            logger.info("Utilisateur supprimé avec succès : ID {}", id);
+            return ResponseEntity.ok(Map.of("message", "Utilisateur supprimé avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de la suppression de l'utilisateur : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/{id}/profile-picture", consumes = "multipart/form-data")
+    public ResponseEntity<?> uploadProfilePicture(@PathVariable Long id, @RequestPart("file") MultipartFile file) {
+        if (!rateLimitBucket.tryConsume(1)) {
+            logger.warn("Limite de débit dépassée pour l'upload de la photo de profil, ID : {}", id);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.warn("Utilisateur non authentifié");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
+        }
+
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
+        if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
+            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
+        }
+
+        try {
+            UserDTO userDTO = new UserDTO();
+            userDTO.setProfilePictureFile(file);
+            userService.updateUser(id, userDTO, authenticatedUser.getRole());
+            logger.info("Photo de profil mise à jour pour l'utilisateur ID : {}", id);
+            return ResponseEntity.ok(Map.of("message", "Photo de profil mise à jour avec succès"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Erreur lors de l'upload de la photo de profil : {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
     }
 }
-
-

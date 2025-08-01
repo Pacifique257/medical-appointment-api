@@ -9,38 +9,32 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder; // Changement ici
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Controller for handling authentication-related requests.
- */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final UserService userService;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder; // Changement ici
     private final JwtUtil jwtUtil;
     private final TokenBlacklist tokenBlacklist;
 
     @Autowired
-    public AuthController(UserService userService, BCryptPasswordEncoder passwordEncoder,
+    public AuthController(UserService userService, PasswordEncoder passwordEncoder,
                           JwtUtil jwtUtil, TokenBlacklist tokenBlacklist) {
         this.userService = userService;
-        this.passwordEncoder = passwordEncoder;
+        this.passwordEncoder = passwordEncoder; // Changement ici
         this.jwtUtil = jwtUtil;
         this.tokenBlacklist = tokenBlacklist;
     }
 
-    /**
-     * Handles user login and generates a JWT token.
-     */
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> credentials) {
         String email = credentials.get("email");
@@ -70,9 +64,6 @@ public class AuthController {
         }
     }
 
-    /**
-     * Handles user logout by blacklisting the JWT token.
-     */
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(@RequestHeader("Authorization") String authorizationHeader) {
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {

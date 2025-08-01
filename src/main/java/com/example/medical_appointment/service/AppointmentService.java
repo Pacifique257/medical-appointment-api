@@ -1,340 +1,320 @@
 package com.example.medical_appointment.service;
 
-
 import com.example.medical_appointment.Models.Appointment;
 import com.example.medical_appointment.Models.Availability;
-import com.example.medical_appointment.Models.Specialty;
 import com.example.medical_appointment.Models.User;
-import com.example.medical_appointment.Repository.AppointmentRepository;
-import com.example.medical_appointment.Repository.AvailabilityRepository;
-import com.example.medical_appointment.Repository.SpecialtyRepository;
-import com.example.medical_appointment.Repository.UserRepository;
 import com.example.medical_appointment.dto.AppointmentDTO;
 import com.example.medical_appointment.dto.AvailabilityDTO;
+import com.example.medical_appointment.Repository.AppointmentRepository;
+import com.example.medical_appointment.Repository.AvailabilityRepository;
+import com.example.medical_appointment.Repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
-import java.time.format.TextStyle;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-
 @Service
-@Transactional
 public class AppointmentService {
 
-    @Autowired
-    private AppointmentRepository appointmentRepository;
+    private static final Logger logger = LoggerFactory.getLogger(AppointmentService.class);
+
+    private final AppointmentRepository appointmentRepository;
+    private final AvailabilityRepository availabilityRepository;
+    private final UserRepository userRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private SpecialtyRepository specialtyRepository;
-
-    @Autowired
-    private AvailabilityRepository availabilityRepository;
-
-    public List<Specialty> getAllSpecialties() {
-        return specialtyRepository.findAll();
+    public AppointmentService(AppointmentRepository appointmentRepository, 
+                              AvailabilityRepository availabilityRepository, 
+                              UserRepository userRepository) {
+        this.appointmentRepository = appointmentRepository;
+        this.availabilityRepository = availabilityRepository;
+        this.userRepository = userRepository;
     }
 
-    public List<User> getDoctorsBySpecialty(Long specialtyId) {
-        return userRepository.findByRoleAndSpecialtyId("DOCTOR", specialtyId);
-    }
-    
-    
-    public List<Appointment> getAppointmentsByPatientEmail(String email) {
-        System.out.println("Fetching appointments for patient email: " + email);
-        User patient = userRepository.findByEmail(email);
-        if (patient == null || !"PATIENT".equals(patient.getRole())) {
-            System.out.println("Invalid patient: " + email);
-            throw new IllegalArgumentException("Invalid patient");
-        }
-        List<Appointment> appointments = appointmentRepository.findByPatientId(patient.getId());
-        System.out.println("Retrieved " + appointments.size() + " appointments for patient ID: " + patient.getId());
-        return appointments;
-    }
+    public AppointmentDTO createAppointment(AppointmentDTO appointmentDTO, String patientEmail) {
+        logger.info("Création d'un rendez-vous pour patientEmail: {}, appointmentDTO: {}", patientEmail, appointmentDTO);
 
-   public List<LocalDate> getAvailableDates(Long doctorId) {
-        LocalDate today = LocalDate.now();
-        System.out.println("Fetching available dates for doctorId: " + doctorId + ", after: " + today);
-        List<LocalDate> dates = availabilityRepository
-                .findByDoctorIdAndDateAfterAndAppointmentIsNull(doctorId, today)
-                .stream()
-                .map(Availability::getDate)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-        System.out.println("Available dates: " + dates);
-        return dates;
-    }
-
-    public List<String> getAvailableTimeSlots(Long doctorId, LocalDate date) {
-        return availabilityRepository.findByDoctorIdAndDateAndAppointmentIsNull(doctorId, date)
-                .stream()
-                .map(Availability::getTimeSlot)
-                .sorted()
-                .collect(Collectors.toList());
-    }
-
-    public Double getDoctorConsultationFee(Long doctorId) {
-        User doctor = userRepository.findById(doctorId)
-                .orElseThrow(() -> new IllegalArgumentException("Doctor not found"));
-        if (!"DOCTOR".equals(doctor.getRole())) {
-            throw new IllegalArgumentException("User is not a doctor");
-        }
-        return doctor.getConsultationFee();
-    }
-
-    public AvailabilityDTO getAvailability(Long doctorId, LocalDate date, String timeSlot) {
-        Availability availability = availabilityRepository
-                .findByDoctorIdAndDateAndTimeSlotAndAppointmentIsNull(doctorId, date, timeSlot)
-                .orElseThrow(() -> new IllegalArgumentException("Availability not found or already taken"));
-
-        AvailabilityDTO dto = new AvailabilityDTO();
-        dto.setId(availability.getId());
-        dto.setDoctorId(availability.getDoctor().getId());
-        dto.setDate(availability.getDate());
-        dto.setDayOfWeek(availability.getDate().getDayOfWeek().toString());
-        dto.setTimeSlot(availability.getTimeSlot());
-        return dto;
-    }
-
-public Appointment createAppointment(AppointmentDTO appointmentDTO, String patientEmail) {
-        System.out.println("Creating appointment with DTO: " + appointmentDTO);
-        System.out.println("Appointment date from DTO: " + appointmentDTO.getAppointmentDate());
-
+        // Vérifier que l'utilisateur est un PATIENT
         User patient = userRepository.findByEmail(patientEmail);
-        if (patient == null || !"PATIENT".equals(patient.getRole())) {
-            System.out.println("Invalid patient: " + patientEmail);
-            throw new IllegalArgumentException("Invalid patient");
+        if (patient == null) {
+            logger.error("Patient non trouvé avec l'email : {}", patientEmail);
+            throw new EntityNotFoundException("Patient non trouvé avec l'email : " + patientEmail);
+        }
+        if (!"PATIENT".equals(patient.getRole())) {
+            logger.error("L'utilisateur avec l'email {} n'est pas un PATIENT, rôle: {}", patientEmail, patient.getRole());
+            throw new IllegalArgumentException("L'utilisateur doit avoir le rôle PATIENT");
         }
 
-        User doctor = userRepository.findById(appointmentDTO.getDoctorId())
-                .orElseThrow(() -> {
-                    System.out.println("Doctor not found: " + appointmentDTO.getDoctorId());
-                    return new IllegalArgumentException("Doctor not found");
-                });
+        // Vérifier que le docteur existe et a le rôle DOCTOR
+        User doctor = userRepository.findUserById(appointmentDTO.getDoctorId());
+        if (doctor == null) {
+            logger.error("Docteur non trouvé avec l'ID : {}", appointmentDTO.getDoctorId());
+            throw new EntityNotFoundException("Docteur non trouvé avec l'ID : " + appointmentDTO.getDoctorId());
+        }
         if (!"DOCTOR".equals(doctor.getRole())) {
-            System.out.println("Selected user is not a doctor: " + appointmentDTO.getDoctorId());
-            throw new IllegalArgumentException("Selected user is not a doctor");
+            logger.error("L'utilisateur avec l'ID {} n'est pas un DOCTOR, rôle: {}", appointmentDTO.getDoctorId(), doctor.getRole());
+            throw new IllegalArgumentException("L'utilisateur doit avoir le rôle DOCTOR");
         }
 
-        if (appointmentDTO.getAvailabilityId() == null) {
-            System.out.println("Time slot not selected: availabilityId is null");
-            throw new IllegalArgumentException("Time slot not selected");
-        }
-
+        // Vérifier que la disponibilité existe et est libre
         Availability availability = availabilityRepository.findById(appointmentDTO.getAvailabilityId())
-                .orElseThrow(() -> {
-                    System.out.println("Availability not found: " + appointmentDTO.getAvailabilityId());
-                    return new IllegalArgumentException("Availability not found");
-                });
+                .orElseThrow(() -> new EntityNotFoundException("Disponibilité non trouvée avec l'ID : " + appointmentDTO.getAvailabilityId()));
         if (availability.getAppointment() != null) {
-            System.out.println("Time slot already taken: availabilityId=" + appointmentDTO.getAvailabilityId());
-            throw new IllegalArgumentException("Time slot already taken");
-        }
-        if (!availability.getDoctor().getId().equals(doctor.getId())) {
-            System.out.println("Availability does not belong to doctor: availabilityId=" + 
-                              appointmentDTO.getAvailabilityId() + ", doctorId=" + doctor.getId());
-            throw new IllegalArgumentException("Availability does not belong to selected doctor");
+            logger.error("La disponibilité avec l'ID {} est déjà prise", appointmentDTO.getAvailabilityId());
+            throw new IllegalStateException("La disponibilité est déjà associée à un rendez-vous");
         }
 
+        // Vérifier que appointmentDate, day et timeSlot correspondent à la disponibilité
+        if (!availability.getDate().equals(appointmentDTO.getAppointmentDate()) ||
+            !availability.getDayOfWeek().equalsIgnoreCase(appointmentDTO.getDay()) ||
+            !availability.getTimeSlot().equals(appointmentDTO.getTimeSlot())) {
+            logger.error("Les données du rendez-vous ne correspondent pas à la disponibilité ID: {}", appointmentDTO.getAvailabilityId());
+            throw new IllegalArgumentException("Les données du rendez-vous doivent correspondre à la disponibilité");
+        }
+
+        // Valider le format du timeSlot
+        validateTimeSlot(appointmentDTO.getTimeSlot());
+
+        // Valider la raison
+        if (appointmentDTO.getReason() == null || appointmentDTO.getReason().trim().isEmpty()) {
+            logger.error("La raison du rendez-vous est vide");
+            throw new IllegalArgumentException("La raison du rendez-vous est requise");
+        }
+
+        // Créer le rendez-vous
         Appointment appointment = new Appointment();
         appointment.setPatient(patient);
         appointment.setDoctor(doctor);
         appointment.setAvailability(availability);
         appointment.setAppointmentDate(appointmentDTO.getAppointmentDate());
+        appointment.setDay(appointmentDTO.getDay());
         appointment.setTimeSlot(appointmentDTO.getTimeSlot());
         appointment.setReason(appointmentDTO.getReason());
         appointment.setConsultationFee(appointmentDTO.getConsultationFee());
         appointment.setStatus("PENDING");
 
-        // Set day based on appointmentDate
-        LocalDate appointmentDate = appointmentDTO.getAppointmentDate();
-        if (appointmentDate == null) {
-            System.out.println("Error: appointmentDate is null in DTO");
-            throw new IllegalArgumentException("Appointment date is required");
-        }
-        String day = appointmentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-        appointment.setDay(day);
-        System.out.println("Setting day: " + day + " for appointmentDate: " + appointmentDate);
-
-        System.out.println("Saving appointment for availabilityId: " + appointmentDTO.getAvailabilityId());
         Appointment savedAppointment = appointmentRepository.save(appointment);
-        availability.setAppointment(savedAppointment);
-        availabilityRepository.save(availability);
-
-        System.out.println("Appointment created: ID=" + savedAppointment.getId());
-        return savedAppointment;
+        logger.info("Rendez-vous créé avec succès, ID: {}", savedAppointment.getId());
+        return mapToDTO(savedAppointment);
     }
 
-    public List<Appointment> getPatientAppointments(Long patientId) {
-        User patient = userRepository.findById(patientId)
-                .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
-        if (!"PATIENT".equals(patient.getRole())) {
-            throw new IllegalArgumentException("User is not a patient");
+    public List<AppointmentDTO> getAllAppointments() {
+        logger.info("Récupération de tous les rendez-vous");
+        return appointmentRepository.findAll().stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    public AppointmentDTO getAppointmentById(Long id) {
+        logger.info("Récupération du rendez-vous avec l'ID: {}", id);
+        Appointment appointment = appointmentRepository.findAppointmentById(id);
+        if (appointment == null) {
+            logger.error("Rendez-vous non trouvé avec l'ID : {}", id);
+            throw new EntityNotFoundException("Rendez-vous non trouvé avec l'ID : " + id);
         }
-        return appointmentRepository.findByPatientId(patientId);
+        return mapToDTO(appointment);
     }
 
-   public List<Appointment> getDoctorAppointments(Long doctorId) {
-    User doctor = userRepository.findById(doctorId)
-            .orElseThrow(() -> new IllegalArgumentException("Doctor not found"));
-    if (!"DOCTOR".equals(doctor.getRole())) {
-        throw new IllegalArgumentException("User is not a doctor");
-    }
-    return appointmentRepository.findByDoctorId(doctorId);
-}
-   
-   public void cancelAppointment(Long appointmentId, String patientEmail) {
-        System.out.println("Attempting to cancel appointment ID: " + appointmentId + " by patient: " + patientEmail);
-
+    public List<AppointmentDTO> getAppointmentsByPatient(String patientEmail) {
+        logger.info("Récupération des rendez-vous pour patientEmail: {}", patientEmail);
         User patient = userRepository.findByEmail(patientEmail);
-        if (patient == null || !"PATIENT".equals(patient.getRole())) {
-            System.out.println("Invalid patient: " + patientEmail);
-            throw new IllegalArgumentException("Invalid patient");
+        if (patient == null) {
+            logger.error("Patient non trouvé avec l'email : {}", patientEmail);
+            throw new EntityNotFoundException("Patient non trouvé avec l'email : " + patientEmail);
         }
-
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> {
-                    System.out.println("Appointment not found: " + appointmentId);
-                    return new IllegalArgumentException("Appointment not found");
-                });
-
-        if (!appointment.getPatient().getId().equals(patient.getId())) {
-            System.out.println("Patient " + patientEmail + " is not authorized to cancel appointment ID: " + appointmentId);
-            throw new IllegalArgumentException("Not authorized to cancel this appointment");
-        }
-
-        if (!"PENDING".equals(appointment.getStatus())) {
-            System.out.println("Cannot cancel appointment ID: " + appointmentId + ", status: " + appointment.getStatus());
-            throw new IllegalArgumentException("Only pending appointments can be cancelled");
-        }
-
-        appointment.setStatus("CANCELLED");
-        Availability availability = appointment.getAvailability();
-        if (availability != null) {
-            availability.setAppointment(null);
-            availabilityRepository.save(availability);
-        }
-        appointmentRepository.save(appointment);
-        System.out.println("Appointment ID: " + appointmentId + " cancelled successfully");
+        return appointmentRepository.findByPatientId(patient.getId()).stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
-    public void confirmAppointment(Long appointmentId, String doctorEmail) {
-        System.out.println("Attempting to confirm appointment ID: " + appointmentId + " by doctor: " + doctorEmail);
-
+    public List<AppointmentDTO> getAppointmentsByDoctor(String doctorEmail) {
+        logger.info("Récupération des rendez-vous pour doctorEmail: {}", doctorEmail);
         User doctor = userRepository.findByEmail(doctorEmail);
-        if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
-            System.out.println("Invalid doctor: " + doctorEmail);
-            throw new IllegalArgumentException("Invalid doctor");
+        if (doctor == null) {
+            logger.error("Docteur non trouvé avec l'email : {}", doctorEmail);
+            throw new EntityNotFoundException("Docteur non trouvé avec l'email : " + doctorEmail);
+        }
+        return appointmentRepository.findByDoctorId(doctor.getId()).stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    public AppointmentDTO confirmAppointment(Long id, String adminEmail) {
+        logger.info("Confirmation du rendez-vous ID: {} par adminEmail: {}", id, adminEmail);
+        User admin = userRepository.findByEmail(adminEmail);
+        if (admin == null) {
+            logger.error("Admin non trouvé avec l'email : {}", adminEmail);
+            throw new EntityNotFoundException("Admin non trouvé avec l'email : " + adminEmail);
+        }
+        if (!"ADMIN".equals(admin.getRole())) {
+            logger.error("L'utilisateur avec l'email {} n'est pas un ADMIN, rôle: {}", adminEmail, admin.getRole());
+            throw new IllegalArgumentException("L'utilisateur doit avoir le rôle ADMIN");
         }
 
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> {
-                    System.out.println("Appointment not found: " + appointmentId);
-                    return new IllegalArgumentException("Appointment not found");
-                });
-
-        if (!appointment.getDoctor().getId().equals(doctor.getId())) {
-            System.out.println("Doctor " + doctorEmail + " is not authorized to confirm appointment ID: " + appointmentId);
-            throw new IllegalArgumentException("Not authorized to confirm this appointment");
+        Appointment appointment = appointmentRepository.findAppointmentById(id);
+        if (appointment == null) {
+            logger.error("Rendez-vous non trouvé avec l'ID : {}", id);
+            throw new EntityNotFoundException("Rendez-vous non trouvé avec l'ID : " + id);
         }
-
         if (!"PENDING".equals(appointment.getStatus())) {
-            System.out.println("Cannot confirm appointment ID: " + appointmentId + ", status: " + appointment.getStatus());
-            throw new IllegalArgumentException("Only pending appointments can be confirmed");
+            logger.error("Le rendez-vous ID: {} n'est pas en attente, statut: {}", id, appointment.getStatus());
+            throw new IllegalStateException("Seuls les rendez-vous en attente peuvent être confirmés");
         }
 
         appointment.setStatus("CONFIRMED");
-        appointmentRepository.save(appointment);
-        System.out.println("Appointment ID: " + appointmentId + " confirmed successfully");
+        Appointment updatedAppointment = appointmentRepository.save(appointment);
+        logger.info("Rendez-vous ID: {} confirmé avec succès", id);
+        return mapToDTO(updatedAppointment);
     }
 
-    public void completeAppointment(Long appointmentId, String doctorEmail) {
-        System.out.println("Attempting to complete appointment ID: " + appointmentId + " by doctor: " + doctorEmail);
-
-        User doctor = userRepository.findByEmail(doctorEmail);
-        if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
-            System.out.println("Invalid doctor: " + doctorEmail);
-            throw new IllegalArgumentException("Invalid doctor");
+    public AppointmentDTO cancelAppointment(Long id, String adminEmail) {
+        logger.info("Annulation du rendez-vous ID: {} par adminEmail: {}", id, adminEmail);
+        User admin = userRepository.findByEmail(adminEmail);
+        if (admin == null) {
+            logger.error("Admin non trouvé avec l'email : {}", adminEmail);
+            throw new EntityNotFoundException("Admin non trouvé avec l'email : " + adminEmail);
+        }
+        if (!"ADMIN".equals(admin.getRole())) {
+            logger.error("L'utilisateur avec l'email {} n'est pas un ADMIN, rôle: {}", adminEmail, admin.getRole());
+            throw new IllegalArgumentException("L'utilisateur doit avoir le rôle ADMIN");
         }
 
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> {
-                    System.out.println("Appointment not found: " + appointmentId);
-                    return new IllegalArgumentException("Appointment not found");
-                });
-
-        if (!appointment.getDoctor().getId().equals(doctor.getId())) {
-            System.out.println("Doctor " + doctorEmail + " is not authorized to complete appointment ID: " + appointmentId);
-            throw new IllegalArgumentException("Not authorized to complete this appointment");
+        Appointment appointment = appointmentRepository.findAppointmentById(id);
+        if (appointment == null) {
+            logger.error("Rendez-vous non trouvé avec l'ID : {}", id);
+            throw new EntityNotFoundException("Rendez-vous non trouvé avec l'ID : " + id);
+        }
+        if ("CANCELLED".equals(appointment.getStatus()) || "COMPLETED".equals(appointment.getStatus())) {
+            logger.error("Le rendez-vous ID: {} est déjà annulé ou terminé, statut: {}", id, appointment.getStatus());
+            throw new IllegalStateException("Le rendez-vous est déjà annulé ou terminé");
         }
 
-        if (!"CONFIRMED".equals(appointment.getStatus())) {
-            System.out.println("Cannot complete appointment ID: " + appointmentId + ", status: " + appointment.getStatus());
-            throw new IllegalArgumentException("Only confirmed appointments can be completed");
+        appointment.setStatus("CANCELLED");
+        Appointment updatedAppointment = appointmentRepository.save(appointment);
+        logger.info("Rendez-vous ID: {} annulé avec succès", id);
+        return mapToDTO(updatedAppointment);
+    }
+
+    public AppointmentDTO completeAppointment(Long id, String adminEmail) {
+        logger.info("Achèvement du rendez-vous ID: {} par adminEmail: {}", id, adminEmail);
+        User admin = userRepository.findByEmail(adminEmail);
+        if (admin == null) {
+            logger.error("Admin non trouvé avec l'email : {}", adminEmail);
+            throw new EntityNotFoundException("Admin non trouvé avec l'email : " + adminEmail);
+        }
+        if (!"ADMIN".equals(admin.getRole())) {
+            logger.error("L'utilisateur avec l'email {} n'est pas un ADMIN, rôle: {}", adminEmail, admin.getRole());
+            throw new IllegalArgumentException("L'utilisateur doit avoir le rôle ADMIN");
+        }
+
+        Appointment appointment = appointmentRepository.findAppointmentById(id);
+        if (appointment == null) {
+            logger.error("Rendez-vous non trouvé avec l'ID : {}", id);
+            throw new EntityNotFoundException("Rendez-vous non trouvé avec l'ID : " + id);
+        }
+        if ("CANCELLED".equals(appointment.getStatus()) || "COMPLETED".equals(appointment.getStatus())) {
+            logger.error("Le rendez-vous ID: {} est déjà annulé ou terminé, statut: {}", id, appointment.getStatus());
+            throw new IllegalStateException("Le rendez-vous est déjà annulé ou terminé");
         }
 
         appointment.setStatus("COMPLETED");
-        appointmentRepository.save(appointment);
-        System.out.println("Appointment ID: " + appointmentId + " completed successfully");
+        Appointment updatedAppointment = appointmentRepository.save(appointment);
+        logger.info("Rendez-vous ID: {} terminé avec succès", id);
+        return mapToDTO(updatedAppointment);
     }
 
-    public List<Appointment> getAppointmentsByDoctorEmail(String email) {
-        System.out.println("Fetching appointments for doctor email: " + email);
-        User doctor = userRepository.findByEmail(email);
-        if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
-            System.out.println("Invalid doctor: " + email);
-            throw new IllegalArgumentException("Invalid doctor");
+    public List<User> getDoctorsBySpecialty(Long specialtyId) {
+        logger.info("Récupération des docteurs pour specialtyId: {}", specialtyId);
+        List<User> doctors = userRepository.findByRole("DOCTOR");
+        if (doctors.isEmpty()) {
+            logger.warn("Aucun docteur trouvé avec le rôle DOCTOR");
         }
-        List<Appointment> appointments = appointmentRepository.findByDoctorId(doctor.getId());
-        System.out.println("Retrieved " + appointments.size() + " appointments for doctor ID: " + doctor.getId());
-        return appointments;
-    }
-    
-    // Compter les rendez-vous à venir d'un docteur (PENDING ou CONFIRMED)
-    public long countUpcomingDoctorAppointments(String doctorEmail) {
-        return appointmentRepository.findByDoctorEmailAndStatusInAndAppointmentDateGreaterThanEqual(
-                doctorEmail, List.of("PENDING", "CONFIRMED"), LocalDate.now()).size();
+        return doctors.stream()
+                .filter(user -> user.getSpecialty() != null && user.getSpecialty().getId().equals(specialtyId))
+                .collect(Collectors.toList());
     }
 
-    // Compter les rendez-vous à venir d'un patient (PENDING ou CONFIRMED)
-    public long countUpcomingPatientAppointments(String patientEmail) {
-        return appointmentRepository.findByPatientEmailAndStatusInAndAppointmentDateGreaterThanEqual(
-                patientEmail, List.of("PENDING", "CONFIRMED"), LocalDate.now()).size();
+    public List<LocalDate> getAvailableDates(Long doctorId) {
+        logger.info("Récupération des dates disponibles pour doctorId: {}", doctorId);
+        return availabilityRepository.findByDoctorIdAndDateAfterAndAppointmentIsNull(doctorId, LocalDate.now())
+                .stream()
+                .map(Availability::getDate)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
-    // Récupérer les 5 prochains rendez-vous d'un docteur
-    public List<Appointment> getNextDoctorAppointments(String doctorEmail) {
-        return appointmentRepository.findTop5ByDoctorEmailAndStatusInOrderByAppointmentDateAscTimeSlotAsc(
-            doctorEmail,
-            List.of("PENDING", "CONFIRMED", "CANCELLED", "COMPLETED")
-        );
+    public List<String> getAvailableTimeSlots(Long doctorId, LocalDate date) {
+        logger.info("Récupération des créneaux disponibles pour doctorId: {} et date: {}", doctorId, date);
+        return availabilityRepository.findByDoctorIdAndDateAndAppointmentIsNull(doctorId, date)
+                .stream()
+                .map(Availability::getTimeSlot)
+                .collect(Collectors.toList());
     }
 
-    // Récupérer les 5 prochains rendez-vous d'un patient
-    public List<Appointment> getNextPatientAppointments(String patientEmail) {
-        return appointmentRepository.findTop5ByPatientEmailAndStatusInOrderByAppointmentDateAscTimeSlotAsc(
-            patientEmail,
-            List.of("PENDING", "CONFIRMED", "CANCELLED", "COMPLETED")
-        );
+    public Double getDoctorConsultationFee(Long doctorId) {
+        logger.info("Récupération des frais de consultation pour doctorId: {}", doctorId);
+        User doctor = userRepository.findUserById(doctorId);
+        if (doctor == null) {
+            logger.error("Docteur non trouvé avec l'ID : {}", doctorId);
+            throw new EntityNotFoundException("Docteur non trouvé avec l'ID : " + doctorId);
+        }
+        return doctor.getConsultationFee() != null ? doctor.getConsultationFee() : 0.0;
     }
-    public long countDoctorAppointments(String doctorEmail) {
-        return appointmentRepository.countByDoctorEmailAndStatusIn(
-            doctorEmail,
-            List.of("PENDING", "CONFIRMED", "CANCELLED", "COMPLETED")
-        );
+
+    public AvailabilityDTO getAvailability(Long doctorId, LocalDate date, String timeSlot) {
+        logger.info("Récupération de la disponibilité pour doctorId: {}, date: {}, timeSlot: {}", doctorId, date, timeSlot);
+        Optional<Availability> availabilityOptional = availabilityRepository.findByDoctorIdAndDateAndTimeSlotAndAppointmentIsNull(doctorId, date, timeSlot);
+        Availability availability = availabilityOptional.orElseThrow(() -> {
+            logger.error("Disponibilité non trouvée pour doctorId: {}, date: {}, timeSlot: {}", doctorId, date, timeSlot);
+            return new EntityNotFoundException("Disponibilité non trouvée pour doctorId: " + doctorId + ", date: " + date + ", timeSlot: " + timeSlot);
+        });
+        AvailabilityDTO dto = new AvailabilityDTO();
+        dto.setId(availability.getId());
+        dto.setDoctorId(availability.getDoctor().getId());
+        dto.setDate(availability.getDate());
+        dto.setDayOfWeek(availability.getDayOfWeek());
+        dto.setTimeSlot(availability.getTimeSlot());
+        return dto;
     }
-    public long countPatientAppointments(String patientEmail) {
-        return appointmentRepository.countByPatientEmailAndStatusIn(
-            patientEmail,
-            List.of("PENDING", "CONFIRMED", "CANCELLED", "COMPLETED")
-        );
+
+    private void validateTimeSlot(String timeSlot) {
+        if (timeSlot == null || !timeSlot.matches("\\d{2}:\\d{2}-\\d{2}:\\d{2}")) {
+            logger.error("Format de timeSlot invalide: {}", timeSlot);
+            throw new IllegalArgumentException("Le format du créneau horaire doit être HH:mm-HH:mm");
+        }
+        String[] times = timeSlot.split("-");
+        try {
+            LocalTime startTime = LocalTime.parse(times[0], DateTimeFormatter.ofPattern("HH:mm"));
+            LocalTime endTime = LocalTime.parse(times[1], DateTimeFormatter.ofPattern("HH:mm"));
+            if (!endTime.isAfter(startTime)) {
+                logger.error("L'heure de fin {} n'est pas postérieure à l'heure de début {}", endTime, startTime);
+                throw new IllegalArgumentException("L'heure de fin doit être postérieure à l'heure de début");
+            }
+        } catch (Exception e) {
+            logger.error("Erreur lors de la validation du timeSlot {}: {}", timeSlot, e.getMessage());
+            throw new IllegalArgumentException("Format de créneau horaire invalide: " + e.getMessage());
+        }
     }
-    
+
+    private AppointmentDTO mapToDTO(Appointment appointment) {
+        AppointmentDTO dto = new AppointmentDTO();
+        dto.setId(appointment.getId());
+        dto.setPatientId(appointment.getPatient().getId());
+        dto.setDoctorId(appointment.getDoctor().getId());
+        dto.setAvailabilityId(appointment.getAvailability().getId());
+        dto.setAppointmentDate(appointment.getAppointmentDate());
+        dto.setDay(appointment.getDay());
+        dto.setTimeSlot(appointment.getTimeSlot());
+        dto.setReason(appointment.getReason());
+        dto.setConsultationFee(appointment.getConsultationFee());
+        dto.setStatus(appointment.getStatus());
+        return dto;
+    }
 }
