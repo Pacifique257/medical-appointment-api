@@ -1,10 +1,12 @@
 package com.example.medical_appointment.config;
 
-
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,90 +17,54 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-@Component
+@Component // Ajoutez cette annotation
 public class JwtRequestFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
+    private static final Logger logger = LoggerFactory.getLogger(JwtRequestFilter.class);
+
     private final UserDetailsService userDetailsService;
+    private final JwtUtil jwtUtil;
     private final TokenBlacklist tokenBlacklist;
 
-    public JwtRequestFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService, TokenBlacklist tokenBlacklist) {
-        this.jwtUtil = jwtUtil;
+    public JwtRequestFilter(UserDetailsService userDetailsService, JwtUtil jwtUtil, TokenBlacklist tokenBlacklist) {
         this.userDetailsService = userDetailsService;
+        this.jwtUtil = jwtUtil;
         this.tokenBlacklist = tokenBlacklist;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String requestURL = request.getRequestURI() + (request.getQueryString() != null ? "?" + request.getQueryString() : "");
-        System.out.println("Processing request for URL: " + requestURL);
-
-        String jwt = null;
-        String email = null;
-
         final String authorizationHeader = request.getHeader("Authorization");
+
+        String email = null;
+        String jwt = null;
+
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwt = authorizationHeader.substring(7);
-            System.out.println("JWT extracted from Authorization header: " + jwt);
-        }
-
-        if (jwt == null) {
-            String tokenParam = request.getParameter("token");
-            if (tokenParam != null && !tokenParam.isEmpty()) {
-                jwt = tokenParam.contains(",") ? tokenParam.split(",")[0] : tokenParam;
-                System.out.println("JWT extracted from URL parameter: " + jwt);
-            }
-        }
-
-        if (jwt == null) {
-            Object tokenFromSession = request.getAttribute("jwtTokenFromSession");
-            if (tokenFromSession instanceof String tokenStr) {
-                jwt = tokenStr;
-                System.out.println("JWT extracted from session attribute: " + jwt);
-            } else {
-                System.out.println("No JWT found in Authorization header, URL parameter, or session for URL: " + requestURL);
-            }
-        }
-
-        if (jwt != null && tokenBlacklist.isBlacklisted(jwt)) {
-            System.out.println("Token is blacklisted: " + jwt);
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token is blacklisted");
-            return;
-        }
-
-        if (jwt != null) {
             try {
                 email = jwtUtil.extractEmail(jwt);
-                System.out.println("Extracted email from JWT: " + email);
-                boolean isValid = jwtUtil.validateToken(jwt, email);
-                System.out.println("Token validation result for email " + email + ": " + isValid);
-
-                if (!isValid) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
-                    return;
-                }
-            } catch (Exception e) {
-                System.out.println("Error extracting email or validating token: " + e.getMessage());
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
-                return;
+            } catch (ExpiredJwtException e) {
+                logger.warn("JWT token is expired: {}", e.getMessage());
             }
         }
 
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-            if (userDetails == null) {
-                System.out.println("UserDetails not found for email: " + email);
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found");
+            if (tokenBlacklist.isBlacklisted(jwt)) {
+                logger.warn("JWT token is blacklisted");
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token is blacklisted");
                 return;
             }
-            UsernamePasswordAuthenticationToken authenticationToken =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-            System.out.println("Authentication successful for email: " + email + ", authorities: " + userDetails.getAuthorities());
-        }
 
+            UserDetails userDetails = this.userDetailsService.loadUserByUsername(email);
+
+            if (jwtUtil.validateToken(jwt, email)) {
+                UsernamePasswordAuthenticationToken authenticationToken =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            }
+        }
         chain.doFilter(request, response);
     }
 }

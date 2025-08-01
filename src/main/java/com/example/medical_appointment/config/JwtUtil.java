@@ -1,35 +1,39 @@
-
 package com.example.medical_appointment.config;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import java.nio.charset.StandardCharsets;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 import javax.crypto.SecretKey;
 
-
 @Component
 public class JwtUtil {
 
-    private final SecretKey secretKey = Keys.hmacShaKeyFor(
-            "your-very-secure-and-long-secret-key-1234567890".getBytes(StandardCharsets.UTF_8));
+    @Value("${jwt.secret}")
+    private String secret;
+
     private final long expirationTime = 30L * 24 * 60 * 60 * 1000; // 30 jours en millisecondes
 
-    // Modifier generateToken pour accepter le rôle comme paramètre
+    private SecretKey getSecretKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
+
     public String generateToken(String email, String role) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role); // ✅ Ajouter le rôle dans les claims
+        claims.put("role", role);
         return Jwts.builder()
                 .setClaims(claims)
                 .subject(email)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationTime))
-                .signWith(secretKey)
+                .signWith(getSecretKey())
                 .compact();
     }
 
@@ -38,7 +42,7 @@ public class JwtUtil {
     }
 
     public String extractRole(String token) {
-        return extractClaim(token, claims -> claims.get("role", String.class)); // ✅ Extraire le rôle
+        return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
     public Date extractExpiration(String token) {
@@ -52,7 +56,7 @@ public class JwtUtil {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith(secretKey)
+                .verifyWith(getSecretKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

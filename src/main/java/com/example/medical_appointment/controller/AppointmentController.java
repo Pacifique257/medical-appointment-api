@@ -1,279 +1,164 @@
 package com.example.medical_appointment.controller;
 
-import com.example.medical_appointment.Models.Appointment;
 import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.dto.AppointmentDTO;
 import com.example.medical_appointment.dto.AvailabilityDTO;
 import com.example.medical_appointment.service.AppointmentService;
-import com.example.medical_appointment.service.UserService;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
-@RequestMapping("/api/appointments")
+import java.time.LocalDate;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/appointments")
 public class AppointmentController {
 
-    @Autowired
-    private AppointmentService appointmentService;
+    private static final Logger logger = LoggerFactory.getLogger(AppointmentController.class);
+
+    private final AppointmentService appointmentService;
 
     @Autowired
-    private UserService userService;
+    public AppointmentController(AppointmentService appointmentService) {
+        this.appointmentService = appointmentService;
+    }
 
-@GetMapping("/create")
-    public ModelAndView showAppointmentForm(@RequestParam(value = "token", required = false) String token) {
-        System.out.println("GET /api/appointments/create - Starting request processing, token: " + token);
-
+    @PostMapping
+    public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody AppointmentDTO appointmentDTO) {
+        logger.info("Requête POST /api/v1/appointments pour créer un rendez-vous: {}", appointmentDTO);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /api/appointments/create - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour la création d'un rendez-vous");
+            throw new IllegalStateException("Utilisateur non authentifié");
         }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User patient = userService.getUserByEmail(userDetails.getUsername());
-        if (patient == null || !"PATIENT".equals(patient.getRole())) {
-            System.out.println("GET /api/appointments/create - Invalid patient: " + userDetails.getUsername());
-            return new ModelAndView("redirect:/login");
-        }
-
-        ModelAndView modelAndView = new ModelAndView("appointment-form");
-        modelAndView.addObject("appointmentDTO", new AppointmentDTO());
-        modelAndView.addObject("specialties", appointmentService.getAllSpecialties());
-        modelAndView.addObject("token", token);
-        modelAndView.addObject("patientId", patient.getId());
-        System.out.println("GET /api/appointments/create - Rendering appointment-form for patient ID: " + patient.getId());
-        return modelAndView;
+        String patientEmail = authentication.getName();
+        AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO, patientEmail);
+        return new ResponseEntity<>(createdAppointment, HttpStatus.CREATED);
     }
 
-@PostMapping("/create")
-public ModelAndView createAppointment(@ModelAttribute AppointmentDTO appointmentDTO, 
-                                     @RequestParam(value = "token", required = false) String token) {
-    System.out.println("POST /api/appointments/create - Starting request processing, token: " + token);
-    System.out.println("POST /api/appointments/create - AppointmentDTO: " + appointmentDTO);
-
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null || !authentication.isAuthenticated() || 
-        authentication.getPrincipal().equals("anonymousUser")) {
-        System.out.println("POST /api/appointments/create - User not authenticated, redirecting to login");
-        return new ModelAndView("redirect:/login");
+    @GetMapping
+    public ResponseEntity<List<AppointmentDTO>> getAllAppointments() {
+        logger.info("Requête GET /api/v1/appointments pour lister tous les rendez-vous");
+        List<AppointmentDTO> appointments = appointmentService.getAllAppointments();
+        return new ResponseEntity<>(appointments, HttpStatus.OK);
     }
 
-    UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-    try {
-        Appointment appointment = appointmentService.createAppointment(appointmentDTO, userDetails.getUsername());
-        System.out.println("POST /api/appointments/create - Appointment created successfully: ID=" + appointment.getId());
-        return new ModelAndView("redirect:/api/appointments/patient?token=" + token);
-    } catch (Exception e) {
-        System.out.println("POST /api/appointments/create - Error: " + e.getMessage());
-        e.printStackTrace();
-        ModelAndView modelAndView = new ModelAndView("appointment-form");
-        modelAndView.addObject("error", "Failed to create appointment: " + e.getMessage());
-        modelAndView.addObject("appointmentDTO", appointmentDTO);
-        modelAndView.addObject("specialties", appointmentService.getAllSpecialties());
-        modelAndView.addObject("token", token);
-        return modelAndView;
+    @GetMapping("/{id}")
+    public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable Long id) {
+        logger.info("Requête GET /api/v1/appointments/{} pour récupérer un rendez-vous", id);
+        AppointmentDTO appointment = appointmentService.getAppointmentById(id);
+        return new ResponseEntity<>(appointment, HttpStatus.OK);
     }
-}
 
-@GetMapping("/patient")
-    public ModelAndView getPatientAppointments(@RequestParam(value = "token", required = false) String token) {
-        System.out.println("GET /api/appointments/patient - Starting request processing, token: " + token);
-
+    @GetMapping("/patient")
+    public ResponseEntity<List<AppointmentDTO>> getPatientAppointments() {
+        logger.info("Requête GET /api/v1/appointments/patient pour lister les rendez-vous du patient");
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /api/appointments/patient - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour la récupération des rendez-vous du patient");
+            throw new IllegalStateException("Utilisateur non authentifié");
         }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        System.out.println("Fetching appointments for user: " + userDetails.getUsername());
-
-        try {
-            List<Appointment> appointments = appointmentService.getAppointmentsByPatientEmail(userDetails.getUsername());
-            System.out.println("Found " + appointments.size() + " appointments for user: " + userDetails.getUsername());
-            ModelAndView modelAndView = new ModelAndView("patient-appointments");
-            modelAndView.addObject("appointments", appointments);
-            modelAndView.addObject("token", token);
-            return modelAndView;
-        } catch (Exception e) {
-            System.out.println("GET /api/appointments/patient - Error: " + e.getMessage());
-            e.printStackTrace();
-            ModelAndView modelAndView = new ModelAndView("patient-appointments");
-            modelAndView.addObject("error", "Failed to load appointments: " + e.getMessage());
-            modelAndView.addObject("appointments", new ArrayList<>());
-            modelAndView.addObject("token", token);
-            return modelAndView;
-        }
-    }
-
-    @GetMapping("/doctor/view")
-    public ModelAndView showDoctorAppointments(@RequestParam(value = "token", required = false) String token) {
-        System.out.println("GET /api/appointments/doctor - Starting request processing");
-        System.out.println("GET /api/appointments/doctor - Received token: " + token);
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /api/appointments/doctor - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User doctor = userService.getUserByEmail(userDetails.getUsername());
-        if (doctor == null || !"DOCTOR".equals(doctor.getRole())) {
-            System.out.println("GET /api/appointments/doctor - Invalid doctor");
-            return new ModelAndView("redirect:/login");
-        }
-
-        ModelAndView modelAndView = new ModelAndView("doctor-appointments");
-        modelAndView.addObject("appointments", appointmentService.getDoctorAppointments(doctor.getId()));
-        modelAndView.addObject("token", token);
-        return modelAndView;
-    }
-
-    @GetMapping("/doctors")
-    @ResponseBody
-    public List<User> getDoctorsBySpecialty(@RequestParam Long specialtyId) {
-        System.out.println("GET /api/appointments/doctors - Fetching doctors for specialtyId: " + specialtyId);
-        return appointmentService.getDoctorsBySpecialty(specialtyId);
-    }
-
-    @GetMapping("/dates")
-    @ResponseBody
-    public List<LocalDate> getAvailableDates(@RequestParam Long doctorId) {
-         System.out.println("GET /api/appointments/dates - Fetching dates for doctorId: " + doctorId);
-        return appointmentService.getAvailableDates(doctorId);
-    }
-
-    @GetMapping("/slots")
-    @ResponseBody
-    public List<String> getAvailableTimeSlots(@RequestParam Long doctorId, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return appointmentService.getAvailableTimeSlots(doctorId, date);
-    }
-
-    @GetMapping("/fee")
-    @ResponseBody
-    public Double getConsultationFee(@RequestParam Long doctorId) {
-        return appointmentService.getDoctorConsultationFee(doctorId);
-    }
-    @GetMapping("/availability")
-    @ResponseBody
-    public AvailabilityDTO getAvailability(@RequestParam Long doctorId, 
-                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date, 
-                                          @RequestParam String timeSlot) {
-        System.out.println("GET /api/appointments/availability - doctorId: " + doctorId + 
-                          ", date: " + date + ", timeSlot: " + timeSlot);
-        try {
-            AvailabilityDTO availability = appointmentService.getAvailability(doctorId, date, timeSlot);
-            System.out.println("GET /api/appointments/availability - Success, ID: " + availability.getId());
-            return availability;
-        } catch (Exception e) {
-            System.out.println("GET /api/appointments/availability - Error: " + e.getMessage());
-            throw e;
-        }
-    }
-  
-@PostMapping("/cancel/{id}")
-    public String cancelAppointment(@PathVariable("id") Long appointmentId, 
-                                   @RequestParam(value = "token", required = false) String token) {
-        System.out.println("POST /api/appointments/cancel/" + appointmentId + ", token: " + token);
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("POST /api/appointments/cancel/" + appointmentId + " - User not authenticated");
-            return "redirect:/login";
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        try {
-            appointmentService.cancelAppointment(appointmentId, userDetails.getUsername());
-            System.out.println("Appointment ID: " + appointmentId + " cancelled successfully");
-        } catch (Exception e) {
-            System.out.println("POST /api/appointments/cancel/" + appointmentId + " - Error: " + e.getMessage());
-        }
-        return "redirect:/api/appointments/patient?token=" + token;
-    }
-
-    @PostMapping("/confirm/{id}")
-    public String confirmAppointment(@PathVariable("id") Long appointmentId, 
-                                    @RequestParam(value = "token", required = false) String token) {
-        System.out.println("POST /api/appointments/confirm/" + appointmentId + ", token: " + token);
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("POST /api/appointments/confirm/" + appointmentId + " - User not authenticated");
-            return "redirect:/login";
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        try {
-            appointmentService.confirmAppointment(appointmentId, userDetails.getUsername());
-            System.out.println("Appointment ID: " + appointmentId + " confirmed successfully");
-        } catch (Exception e) {
-            System.out.println("POST /api/appointments/confirm/" + appointmentId + " - Error: " + e.getMessage());
-        }
-        return "redirect:/api/appointments/doctor?token=" + token;
-    }
-
-    @PostMapping("/complete/{id}")
-    public String completeAppointment(@PathVariable("id") Long appointmentId, 
-                                     @RequestParam(value = "token", required = false) String token) {
-        System.out.println("POST /api/appointments/complete/" + appointmentId + ", token: " + token);
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("POST /api/appointments/complete/" + appointmentId + " - User not authenticated");
-            return "redirect:/login";
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        try {
-            appointmentService.completeAppointment(appointmentId, userDetails.getUsername());
-            System.out.println("Appointment ID: " + appointmentId + " completed successfully");
-        } catch (Exception e) {
-            System.out.println("POST /api/appointments/complete/" + appointmentId + " - Error: " + e.getMessage());
-        }
-        return "redirect:/api/appointments/doctor?token=" + token;
+        String patientEmail = authentication.getName();
+        List<AppointmentDTO> appointments = appointmentService.getAppointmentsByPatient(patientEmail);
+        return new ResponseEntity<>(appointments, HttpStatus.OK);
     }
 
     @GetMapping("/doctor")
-    public ModelAndView getDoctorAppointments(@RequestParam(value = "token", required = false) String token) {
-        System.out.println("GET /api/appointments/doctor - Starting request processing, token: " + token);
+    public ResponseEntity<List<AppointmentDTO>> getDoctorAppointments() {
+        logger.info("Requête GET /api/v1/appointments/doctor pour lister les rendez-vous du docteur");
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
-            System.out.println("GET /api/appointments/doctor - User not authenticated, redirecting to login");
-            return new ModelAndView("redirect:/login");
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour la récupération des rendez-vous du docteur");
+            throw new IllegalStateException("Utilisateur non authentifié");
         }
+        String doctorEmail = authentication.getName();
+        List<AppointmentDTO> appointments = appointmentService.getAppointmentsByDoctor(doctorEmail);
+        return new ResponseEntity<>(appointments, HttpStatus.OK);
+    }
 
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        System.out.println("Fetching appointments for doctor: " + userDetails.getUsername());
-        try {
-            List<Appointment> appointments = appointmentService.getAppointmentsByDoctorEmail(userDetails.getUsername());
-            System.out.println("Found " + appointments.size() + " appointments for doctor: " + userDetails.getUsername());
-            ModelAndView modelAndView = new ModelAndView("doctor-appointments");
-            modelAndView.addObject("appointments", appointments);
-            modelAndView.addObject("token", token);
-            return modelAndView;
-        } catch (Exception e) {
-            System.out.println("GET /api/appointments/doctor - Error: " + e.getMessage());
-            e.printStackTrace();
-            ModelAndView modelAndView = new ModelAndView("doctor-appointments");
-            modelAndView.addObject("error", "Failed to load appointments: " + e.getMessage());
-            modelAndView.addObject("appointments", new ArrayList<>());
-            modelAndView.addObject("token", token);
-            return modelAndView;
+    @PutMapping("/{id}/confirm")
+    public ResponseEntity<AppointmentDTO> confirmAppointment(@PathVariable Long id) {
+        logger.info("Requête PUT /api/v1/appointments/{}/confirm pour confirmer un rendez-vous", id);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour la confirmation du rendez-vous ID: {}", id);
+            throw new IllegalStateException("Utilisateur non authentifié");
         }
+        String adminEmail = authentication.getName();
+        AppointmentDTO updatedAppointment = appointmentService.confirmAppointment(id, adminEmail);
+        return new ResponseEntity<>(updatedAppointment, HttpStatus.OK);
+    }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<AppointmentDTO> cancelAppointment(@PathVariable Long id) {
+        logger.info("Requête PUT /api/v1/appointments/{}/cancel pour annuler un rendez-vous", id);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour l'annulation du rendez-vous ID: {}", id);
+            throw new IllegalStateException("Utilisateur non authentifié");
+        }
+        String adminEmail = authentication.getName();
+        AppointmentDTO updatedAppointment = appointmentService.cancelAppointment(id, adminEmail);
+        return new ResponseEntity<>(updatedAppointment, HttpStatus.OK);
+    }
+
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<AppointmentDTO> completeAppointment(@PathVariable Long id) {
+        logger.info("Requête PUT /api/v1/appointments/{}/complete pour terminer un rendez-vous", id);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            logger.error("Utilisateur non authentifié pour l'achèvement du rendez-vous ID: {}", id);
+            throw new IllegalStateException("Utilisateur non authentifié");
+        }
+        String adminEmail = authentication.getName();
+        AppointmentDTO updatedAppointment = appointmentService.completeAppointment(id, adminEmail);
+        return new ResponseEntity<>(updatedAppointment, HttpStatus.OK);
+    }
+
+    @GetMapping("/doctors")
+    public ResponseEntity<List<User>> getDoctorsBySpecialty(@RequestParam Long specialtyId) {
+        logger.info("Requête GET /api/v1/appointments/doctors pour specialtyId: {}", specialtyId);
+        List<User> doctors = appointmentService.getDoctorsBySpecialty(specialtyId);
+        return new ResponseEntity<>(doctors, HttpStatus.OK);
+    }
+
+    @GetMapping("/dates")
+    public ResponseEntity<List<LocalDate>> getAvailableDates(@RequestParam Long doctorId) {
+        logger.info("Requête GET /api/v1/appointments/dates pour doctorId: {}", doctorId);
+        List<LocalDate> dates = appointmentService.getAvailableDates(doctorId);
+        return new ResponseEntity<>(dates, HttpStatus.OK);
+    }
+
+    @GetMapping("/slots")
+    public ResponseEntity<List<String>> getAvailableTimeSlots(@RequestParam Long doctorId, 
+                                                             @RequestParam String date) {
+        logger.info("Requête GET /api/v1/appointments/slots pour doctorId: {} et date: {}", doctorId, date);
+        LocalDate localDate = LocalDate.parse(date);
+        List<String> slots = appointmentService.getAvailableTimeSlots(doctorId, localDate);
+        return new ResponseEntity<>(slots, HttpStatus.OK);
+    }
+
+    @GetMapping("/fee")
+    public ResponseEntity<Double> getDoctorConsultationFee(@RequestParam Long doctorId) {
+        logger.info("Requête GET /api/v1/appointments/fee pour doctorId: {}", doctorId);
+        Double fee = appointmentService.getDoctorConsultationFee(doctorId);
+        return new ResponseEntity<>(fee, HttpStatus.OK);
+    }
+
+    @GetMapping("/availability")
+    public ResponseEntity<AvailabilityDTO> getAvailability(@RequestParam Long doctorId, 
+                                                          @RequestParam String date, 
+                                                          @RequestParam String timeSlot) {
+        logger.info("Requête GET /api/v1/appointments/availability pour doctorId: {}, date: {}, timeSlot: {}", doctorId, date, timeSlot);
+        LocalDate localDate = LocalDate.parse(date);
+        AvailabilityDTO availability = appointmentService.getAvailability(doctorId, localDate, timeSlot);
+        return new ResponseEntity<>(availability, HttpStatus.OK);
     }
 }
