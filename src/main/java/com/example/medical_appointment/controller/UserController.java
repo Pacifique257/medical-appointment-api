@@ -4,12 +4,16 @@ import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.dto.UserDTO;
 import com.example.medical_appointment.service.UserService;
 import io.github.bucket4j.Bucket;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -33,6 +37,12 @@ public class UserController {
         this.rateLimitBucket = rateLimitBucket;
     }
 
+    @Operation(summary = "Inscrire un utilisateur", description = "Crée un nouvel utilisateur. Accessible à tous.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Utilisateur inscrit avec succès"),
+        @ApiResponse(responseCode = "400", description = "Données d'entrée invalides"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @PostMapping(value = "/register", consumes = "application/json")
     public ResponseEntity<?> registerUser(@Valid @RequestBody UserDTO userDTO) {
         if (!rateLimitBucket.tryConsume(1)) {
@@ -50,6 +60,12 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Inscrire un admin initial", description = "Crée un utilisateur admin initial. Accessible à tous.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Admin initial créé avec succès"),
+        @ApiResponse(responseCode = "400", description = "Données d'entrée invalides"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @PostMapping(value = "/admin/register", consumes = "application/json")
     public ResponseEntity<?> registerInitialAdmin(@Valid @RequestBody UserDTO userDTO) {
         if (!rateLimitBucket.tryConsume(1)) {
@@ -67,26 +83,21 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Créer un utilisateur", description = "Crée un utilisateur. Réservé aux ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Utilisateur créé avec succès"),
+        @ApiResponse(responseCode = "400", description = "Données d'entrée invalides"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @PostMapping(consumes = "application/json")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createUser(@Valid @RequestBody UserDTO userDTO) {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour la création d'utilisateur");
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
-            logger.warn("Utilisateur non authentifié pour la création d'utilisateur");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
-        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
-            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut créer des utilisateurs"));
-        }
-
         logger.info("Création de l'utilisateur : {}", userDTO.getEmail());
         try {
             userService.createAdminUser(userDTO);
@@ -98,26 +109,31 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Récupérer un utilisateur par ID", description = "Récupère un utilisateur par son ID. Accessible à l'utilisateur lui-même ou à un ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Utilisateur récupéré avec succès"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "404", description = "Utilisateur non trouvé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour la récupération de l'utilisateur ID : {}", id);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
             logger.warn("Utilisateur non authentifié");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
         }
-
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
         if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
             logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
         }
-
         try {
             User user = userService.getUserById(id);
             logger.info("Utilisateur récupéré avec succès : ID {}", id);
@@ -128,26 +144,20 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Lister tous les utilisateurs", description = "Récupère la liste de tous les utilisateurs. Réservé aux ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Liste des utilisateurs récupérée avec succès"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getAllUsers() {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour la récupération de tous les utilisateurs");
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
-            logger.warn("Utilisateur non authentifié");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
-        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
-            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut lister tous les utilisateurs"));
-        }
-
         try {
             List<User> users = userService.getAllUsers();
             logger.info("Liste des utilisateurs récupérée avec succès");
@@ -158,26 +168,32 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Mettre à jour un utilisateur", description = "Met à jour un utilisateur par son ID. Accessible à l'utilisateur lui-même ou à un ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Utilisateur mis à jour avec succès"),
+        @ApiResponse(responseCode = "400", description = "Données d'entrée invalides"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "404", description = "Utilisateur non trouvé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody UserDTO userDTO) {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour la mise à jour de l'utilisateur ID : {}", id);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
             logger.warn("Utilisateur non authentifié");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
         }
-
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
         if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
             logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
         }
-
         try {
             userService.updateUser(id, userDTO, authenticatedUser.getRole());
             logger.info("Utilisateur mis à jour avec succès : {}", userDTO.getEmail());
@@ -188,26 +204,21 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Supprimer un utilisateur", description = "Supprime un utilisateur par son ID. Réservé aux ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Utilisateur supprimé avec succès"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "404", description = "Utilisateur non trouvé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour la suppression de l'utilisateur ID : {}", id);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
-            logger.warn("Utilisateur non authentifié");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
-        }
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
-        if (authenticatedUser == null || !authenticatedUser.getRole().equals("ADMIN")) {
-            logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Seul un ADMIN peut supprimer des utilisateurs"));
-        }
-
         try {
             userService.deleteUser(id);
             logger.info("Utilisateur supprimé avec succès : ID {}", id);
@@ -218,26 +229,35 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "Uploader une photo de profil", description = "Met à jour la photo de profil d'un utilisateur. Accessible à l'utilisateur lui-même ou à un ADMIN.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Photo de profil mise à jour avec succès"),
+        @ApiResponse(responseCode = "400", description = "Fichier invalide ou données invalides"),
+        @ApiResponse(responseCode = "401", description = "Utilisateur non authentifié"),
+        @ApiResponse(responseCode = "403", description = "Accès non autorisé"),
+        @ApiResponse(responseCode = "429", description = "Limite de débit dépassée")
+    })
     @PostMapping(value = "/{id}/profile-picture", consumes = "multipart/form-data")
     public ResponseEntity<?> uploadProfilePicture(@PathVariable Long id, @RequestPart("file") MultipartFile file) {
         if (!rateLimitBucket.tryConsume(1)) {
             logger.warn("Limite de débit dépassée pour l'upload de la photo de profil, ID : {}", id);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "Limite de débit dépassée"));
         }
-
+        if (!file.getContentType().startsWith("image/") || file.getSize() > 5 * 1024 * 1024) { // 5MB max
+            logger.warn("Fichier invalide: type={} ou taille={}", file.getContentType(), file.getSize());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Fichier invalide (doit être une image, max 5MB)"));
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
             logger.warn("Utilisateur non authentifié");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Utilisateur non authentifié"));
         }
-
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         User authenticatedUser = userService.getUserByEmail(userDetails.getUsername());
         if (authenticatedUser == null || (!authenticatedUser.getId().equals(id) && !authenticatedUser.getRole().equals("ADMIN"))) {
             logger.warn("Accès non autorisé pour l'utilisateur : {}", userDetails.getUsername());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accès non autorisé"));
         }
-
         try {
             UserDTO userDTO = new UserDTO();
             userDTO.setProfilePictureFile(file);

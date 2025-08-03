@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import java.util.List;
 @RequestMapping("/api/v1/specialties")
 public class SpecialtyController {
 
+    private static final Logger logger = LoggerFactory.getLogger(SpecialtyController.class);
     private final SpecialtyService specialtyService;
 
     @Autowired
@@ -35,7 +38,9 @@ public class SpecialtyController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SpecialtyDTO> createSpecialty(@Valid @RequestBody SpecialtyDTO specialtyDTO) {
+        logger.info("Création de la spécialité : {}", specialtyDTO.getName());
         SpecialtyDTO createdSpecialty = specialtyService.createSpecialty(specialtyDTO);
+        logger.info("Spécialité créée avec succès : {}", specialtyDTO.getName());
         return new ResponseEntity<>(createdSpecialty, HttpStatus.CREATED);
     }
 
@@ -48,7 +53,9 @@ public class SpecialtyController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR')")
     public ResponseEntity<List<SpecialtyDTO>> getAllSpecialties() {
+        logger.info("Récupération de toutes les spécialités");
         List<SpecialtyDTO> specialties = specialtyService.getAllSpecialties();
+        logger.info("Liste des spécialités récupérée avec succès");
         return new ResponseEntity<>(specialties, HttpStatus.OK);
     }
 
@@ -62,7 +69,9 @@ public class SpecialtyController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR')")
     public ResponseEntity<SpecialtyDTO> getSpecialtyById(@PathVariable Long id) {
+        logger.info("Récupération de la spécialité ID : {}", id);
         SpecialtyDTO specialty = specialtyService.getSpecialtyById(id);
+        logger.info("Spécialité récupérée avec succès : ID {}", id);
         return new ResponseEntity<>(specialty, HttpStatus.OK);
     }
 
@@ -77,7 +86,9 @@ public class SpecialtyController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SpecialtyDTO> updateSpecialty(@PathVariable Long id, @Valid @RequestBody SpecialtyDTO specialtyDTO) {
+        logger.info("Mise à jour de la spécialité ID : {}", id);
         SpecialtyDTO updatedSpecialty = specialtyService.updateSpecialty(id, specialtyDTO);
+        logger.info("Spécialité mise à jour avec succès : ID {}", id);
         return new ResponseEntity<>(updatedSpecialty, HttpStatus.OK);
     }
 
@@ -91,7 +102,9 @@ public class SpecialtyController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteSpecialty(@PathVariable Long id) {
+        logger.info("Suppression de la spécialité ID : {}", id);
         specialtyService.deleteSpecialty(id);
+        logger.info("Spécialité supprimée avec succès : ID {}", id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }
