@@ -1,7 +1,12 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'maven:3.9.3-eclipse-temurin-17'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
     stages {
-        stage('Construction') {
+        stage('Build') {
             steps {
                 sh 'mvn clean package'
             }
@@ -11,10 +16,20 @@ pipeline {
                 sh 'mvn test'
             }
         }
-        stage('Déploiement') {
+        stage('Build Docker Image') {
             steps {
-                sh 'docker build -t medical-appointment .'
-                sh 'docker push medical-appointment'
+                script {
+                    def app = docker.build("medical-appointment:latest")
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        app.push()
+                    }
+                }
             }
         }
     }
