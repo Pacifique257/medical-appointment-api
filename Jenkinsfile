@@ -1,8 +1,9 @@
 pipeline {
-    agent any // Utilise le conteneur Jenkins comme agent principal
+    agent any // Utilise l'agent Jenkins (qui n'a pas Docker, mais on contourne ça)
     environment {
         DOCKER_IMAGE = 'pacifiquedev/medical-appointment'
         DOCKER_CREDENTIALS = 'dockerhub-credentials'
+        WORKSPACE = "${env.WORKSPACE}" // Chemin du répertoire de travail
     }
     stages {
         stage('Checkout') {
@@ -14,29 +15,31 @@ pipeline {
         }
         stage('Build Maven') {
             steps {
-                sh 'docker run --rm -v $(pwd):/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn clean package -DskipTests=false'
+                sh 'docker run --rm -v $WORKSPACE:/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn clean package -DskipTests=false'
             }
         }
         stage('Run Tests') {
             steps {
-                sh 'docker run --rm -v $(pwd):/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn test'
+                sh 'docker run --rm -v $WORKSPACE:/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn test'
             }
         }
         stage('Build Docker Image') {
             steps {
+                sh 'docker build -t $DOCKER_IMAGE:latest $WORKSPACE'
                 script {
                     commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    app = docker.build("${DOCKER_IMAGE}:latest")
-                    appVersion = docker.build("${DOCKER_IMAGE}:${commit}")
+                    sh "docker tag $DOCKER_IMAGE:latest $DOCKER_IMAGE:${commit}"
                 }
             }
         }
         stage('Push Docker Image') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS) {
-                        app.push()
-                        appVersion.push()
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE:latest'
+                    script {
+                        commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                        sh "docker push $DOCKER_IMAGE:${commit}"
                     }
                 }
             }
