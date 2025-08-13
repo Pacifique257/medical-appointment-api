@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.3-eclipse-temurin-17'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any // Utilise le conteneur Jenkins comme agent principal
     environment {
         DOCKER_IMAGE = 'pacifiquedev/medical-appointment'
         DOCKER_CREDENTIALS = 'dockerhub-credentials'
@@ -12,23 +7,24 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                checkout([$class: 'GitSCM',
+                          branches: [[name: '*/main']],
+                          userRemoteConfigs: [[url: 'https://github.com/Pacifique257/medical-appointment-api', credentialsId: 'a8ca7ec4-7429-4b26-bcd8-14dacf0a8552']]])
             }
         }
         stage('Build Maven') {
             steps {
-                sh 'mvn clean package -DskipTests=false'
+                sh 'docker run --rm -v $(pwd):/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn clean package -DskipTests=false'
             }
         }
         stage('Run Tests') {
             steps {
-                sh 'mvn test'
+                sh 'docker run --rm -v $(pwd):/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn test'
             }
         }
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Tag avec latest et commit SHA
                     commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
                     app = docker.build("${DOCKER_IMAGE}:latest")
                     appVersion = docker.build("${DOCKER_IMAGE}:${commit}")
@@ -55,4 +51,3 @@ pipeline {
         }
     }
 }
-
