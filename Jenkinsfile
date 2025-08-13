@@ -1,5 +1,5 @@
 pipeline {
-    agent any // Utilise l'agent Jenkins (qui n'a pas Docker, mais on contourne ça)
+    agent any // Utilise l'agent Jenkins, qui n'a pas besoin de Docker localement
     environment {
         DOCKER_IMAGE = 'pacifiquedev/medical-appointment'
         DOCKER_CREDENTIALS = 'dockerhub-credentials'
