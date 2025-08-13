@@ -1,5 +1,5 @@
 pipeline {
-    agent any // Utilise l'agent Jenkins, qui n'a pas besoin de Docker localement
+    agent any // Utilise l'agent Jenkins, mais on force l'exécution sur l'hôte
     environment {
         DOCKER_IMAGE = 'pacifiquedev/medical-appointment'
         DOCKER_CREDENTIALS = 'dockerhub-credentials'
@@ -15,31 +15,31 @@ pipeline {
         }
         stage('Build Maven') {
             steps {
-                sh 'docker run --rm -v $WORKSPACE:/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn clean package -DskipTests=false'
+                sh 'docker run --rm -v "$WORKSPACE":/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn clean package -DskipTests=false'
             }
         }
         stage('Run Tests') {
             steps {
-                sh 'docker run --rm -v $WORKSPACE:/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn test'
+                sh 'docker run --rm -v "$WORKSPACE":/usr/src/mymaven -w /usr/src/mymaven maven:3.9.3-eclipse-temurin-17 mvn test'
             }
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:latest $WORKSPACE'
+                sh '/usr/bin/docker build -t "$DOCKER_IMAGE":latest "$WORKSPACE"' // Chemin explicite vers docker sur l'hôte
                 script {
-                    commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    sh "docker tag $DOCKER_IMAGE:latest $DOCKER_IMAGE:${commit}"
+                    commit = sh(script: '/usr/bin/git rev-parse --short HEAD', returnStdout: true).trim()
+                    sh "/usr/bin/docker tag $DOCKER_IMAGE:latest $DOCKER_IMAGE:${commit}"
                 }
             }
         }
         stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                    sh 'docker push $DOCKER_IMAGE:latest'
+                    sh '/usr/bin/echo $DOCKER_PASSWORD | /usr/bin/docker login -u $DOCKER_USERNAME --password-stdin'
+                    sh '/usr/bin/docker push $DOCKER_IMAGE:latest'
                     script {
-                        commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                        sh "docker push $DOCKER_IMAGE:${commit}"
+                        commit = sh(script: '/usr/bin/git rev-parse --short HEAD', returnStdout: true).trim()
+                        sh "/usr/bin/docker push $DOCKER_IMAGE:${commit}"
                     }
                 }
             }
