@@ -1,5 +1,6 @@
 package com.example.medical_appointment.service;
 
+<<<<<<< HEAD
 import com.example.medical_appointment.Models.Specialty;
 import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.Repository.SpecialtyRepository;
@@ -17,10 +18,18 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Base64;
+=======
+import com.example.medical_appointment.Models.User;
+import com.example.medical_appointment.Repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 
 @Service
 public class UserService {
 
+<<<<<<< HEAD
     @Autowired
     private UserRepository userRepository;
 
@@ -173,3 +182,33 @@ public class UserService {
         userRepository.delete(user);
     }
 }
+=======
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Autowired
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public User createUser(User user) {
+        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userRepository.save(user);
+    }
+
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+    }
+
+    public boolean validateLogin(String email, String password) {
+        return userRepository.findByEmail(email)
+                .map(user -> passwordEncoder.matches(password, user.getPassword()))
+                .orElse(false);
+    }
+}
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)

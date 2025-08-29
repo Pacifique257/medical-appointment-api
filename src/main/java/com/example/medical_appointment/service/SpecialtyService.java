@@ -2,6 +2,7 @@ package com.example.medical_appointment.service;
 
 import com.example.medical_appointment.Models.Specialty;
 import com.example.medical_appointment.Repository.SpecialtyRepository;
+<<<<<<< HEAD
 import com.example.medical_appointment.dto.SpecialtyDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,11 @@ import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+=======
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 @Service
 public class SpecialtyService {
 
@@ -20,6 +26,7 @@ public class SpecialtyService {
         this.specialtyRepository = specialtyRepository;
     }
 
+<<<<<<< HEAD
     public SpecialtyDTO createSpecialty(SpecialtyDTO specialtyDTO) {
         if (specialtyRepository.existsByName(specialtyDTO.getName())) {
             throw new IllegalArgumentException("Une spécialité avec ce nom existe déjà");
@@ -68,3 +75,9 @@ public class SpecialtyService {
         return dto;
     }
 }
+=======
+    public Specialty createSpecialty(Specialty specialty) {
+        return specialtyRepository.save(specialty);
+    }
+}
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)

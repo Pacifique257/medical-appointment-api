@@ -1,6 +1,7 @@
 package com.example.medical_appointment.Repository;
 
 import com.example.medical_appointment.Models.Appointment;
+<<<<<<< HEAD
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -27,4 +28,24 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     
     @Query("SELECT a FROM Appointment a WHERE a.id = :id")
     Appointment findAppointmentById(Long id); // Méthode personnalisée pour éviter Optional<Appointment>
+=======
+import com.example.medical_appointment.Models.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.List;
+
+//public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
+//    List<Appointment> findByPatient(User patient);
+//    List<Appointment> findByDoctorAndDate(User doctor, LocalDate date);
+//
+//    public List<Appointment> findByDoctorAndAppointmentDate(User doctor, LocalDate date);
+//}
+
+
+
+public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
+    List<Appointment> findByPatient(User patient);
+    List<Appointment> findByDoctorAndAppointmentDate(User doctor, LocalDate appointmentDate);
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 }

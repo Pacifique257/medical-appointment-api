@@ -1,5 +1,6 @@
 package com.example.medical_appointment.Repository;
 
+<<<<<<< HEAD
 
 import com.example.medical_appointment.Models.Availability;
 import com.example.medical_appointment.Models.User;
@@ -15,3 +16,15 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
     List<Availability> findByDoctorIdAndDateAfterAndAppointmentIsNull(Long doctorId, LocalDate date);
     Optional<Availability> findByDoctorIdAndDateAndTimeSlotAndAppointmentIsNull(Long doctorId, LocalDate date, String timeSlot);
 }
+=======
+import com.example.medical_appointment.Models.Availability;
+import com.example.medical_appointment.Models.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public interface AvailabilityRepository extends JpaRepository<Availability, Long> {
+    List<Availability> findByDoctorAndDate(User doctor, LocalDate date);
+}
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)

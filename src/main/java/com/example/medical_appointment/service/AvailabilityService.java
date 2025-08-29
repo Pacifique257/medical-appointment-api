@@ -3,23 +3,31 @@ package com.example.medical_appointment.service;
 import com.example.medical_appointment.Models.Availability;
 import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.Repository.AvailabilityRepository;
+<<<<<<< HEAD
 import com.example.medical_appointment.Repository.UserRepository;
 import com.example.medical_appointment.dto.AvailabilityDTO;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+=======
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+<<<<<<< HEAD
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
+=======
+import java.util.List;
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 
 @Service
 public class AvailabilityService {
 
+<<<<<<< HEAD
     private static final Logger logger = LoggerFactory.getLogger(AvailabilityService.class);
 
     private final AvailabilityRepository availabilityRepository;
@@ -207,3 +215,27 @@ public class AvailabilityService {
         return dto;
     }
 }
+=======
+    private final AvailabilityRepository availabilityRepository;
+
+    @Autowired
+    public AvailabilityService(AvailabilityRepository availabilityRepository) {
+        this.availabilityRepository = availabilityRepository;
+    }
+
+    public Availability createAvailability(Availability availability) {
+        if (!"DOCTOR".equals(availability.getDoctor().getRole())) {
+            throw new IllegalArgumentException("Only doctors can create availabilities");
+        }
+        return availabilityRepository.save(availability);
+    }
+
+    public List<Availability> getAvailabilitiesByDoctorAndDate(User doctor, LocalDate date) {
+        return availabilityRepository.findByDoctorAndDate(doctor, date);
+    }
+
+    public void deleteAvailability(Long id) {
+        availabilityRepository.deleteById(id);
+    }
+}
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)

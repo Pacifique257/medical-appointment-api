@@ -26,8 +26,11 @@ public class Availability {
 
     @Column(name = "time_slot", nullable = false)
     private String timeSlot;
+<<<<<<< HEAD
     @OneToOne
     @JoinColumn(name = "appointment_id") // Column in availabilities table
     private Appointment appointment; // Null if slot is free
     
+=======
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 }

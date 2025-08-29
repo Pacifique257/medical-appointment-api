@@ -1,7 +1,12 @@
 package com.example.medical_appointment.dto;
 
+<<<<<<< HEAD
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+=======
+
+
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -9,6 +14,7 @@ import java.time.LocalDate;
 @Data
 public class AppointmentDTO {
     private Long id;
+<<<<<<< HEAD
 
     @NotNull(message = "L'ID du patient est requis")
     private Long patientId;
@@ -34,5 +40,15 @@ public class AppointmentDTO {
     @NotNull(message = "Le coût de la consultation est requis")
     private Double consultationFee;
 
+=======
+    private Long patientId;
+    private Long doctorId;
+    private Long availabilityId;
+    private LocalDate appointmentDate;
+    private String day;
+    private String reason;
+    private String timeSlot;
+    private Double consultationFee;
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
     private String status;
 }

@@ -1,5 +1,6 @@
 package com.example.medical_appointment.dto;
 
+<<<<<<< HEAD
 import jakarta.validation.constraints.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -78,4 +79,27 @@ public class UserDTO {
     public void setProfilePictureFile(MultipartFile profilePictureFile) { this.profilePictureFile = profilePictureFile; }
     public Long getSpecialtyId() { return specialtyId; }
     public void setSpecialtyId(Long specialtyId) { this.specialtyId = specialtyId; }
+=======
+
+import lombok.Data;
+
+import java.time.LocalDate;
+
+@Data
+public class UserDTO {
+    private Long id;
+    private String lastName;
+    private String firstName;
+    private String email;
+    private String role;
+    private String phone;
+    private LocalDate birthDate;
+    private String address;
+    private Double consultationFee;
+    private String biography;
+    private String gender;
+    private String profilePicture;
+    private Long specialtyId;
+    private String password;
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 }

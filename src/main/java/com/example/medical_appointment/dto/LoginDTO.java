@@ -1,5 +1,6 @@
 package com.example.medical_appointment.dto;
 
+<<<<<<< HEAD
 import jakarta.validation.constraints.NotBlank;
 
 public class LoginDTO {
@@ -24,4 +25,14 @@ public class LoginDTO {
     public void setPassword(String password) {
         this.password = password;
     }
+=======
+
+
+import lombok.Data;
+
+@Data
+public class LoginDTO {
+    private String email;
+    private String password;
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 }

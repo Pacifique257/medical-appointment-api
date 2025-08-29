@@ -1,5 +1,6 @@
 package com.example.medical_appointment.controller;
 
+<<<<<<< HEAD
 import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.config.JwtUtil;
 import com.example.medical_appointment.config.TokenBlacklist;
@@ -94,6 +95,35 @@ public class AuthController {
         } else {
             logger.warn("Logout failed: Invalid or missing token");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Invalid token"));
+=======
+
+
+
+import com.example.medical_appointment.dto.LoginDTO;
+import com.example.medical_appointment.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final UserService userService;
+
+    @Autowired
+    public AuthController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<String> login(@RequestBody LoginDTO loginDTO) {
+        boolean isValid = userService.validateLogin(loginDTO.getEmail(), loginDTO.getPassword());
+        if (isValid) {
+            return ResponseEntity.ok("Login successful");
+        } else {
+            return ResponseEntity.status(401).body("Invalid email or password");
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
         }
     }
 }
