@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ========= Java =========
 *.class
 *.jar
@@ -24,11 +25,36 @@ application-test.properties
 *.pid
 
 # ========= NetBeans spécifique =========
+=======
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
+<<<<<<< HEAD
 
 # Cache NetBeans
 build/
@@ -44,4 +70,11 @@ logs/
 *.log
 
 # ========= VS Code (au cas où) =========
+=======
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+>>>>>>> 9ed9acb (Initiation du projet et le cahier de charge)
 .vscode/
