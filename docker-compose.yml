@@ -1,13 +1,16 @@
 version: '3.8'
+
 services:
   app:
-    image: medical-appointment:latest
     build:
       context: .
       dockerfile: Dockerfile
+    image: medical-appointment:latest
+    container_name: medical-app
     ports:
       - "8080:8080"
     environment:
+      - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/medical_db
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=secret
@@ -16,18 +19,26 @@ services:
       - db
     networks:
       - app-network
+
   db:
     image: postgres:15
+    container_name: medical-db
+    restart: always
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=secret
       - POSTGRES_DB=medical_db
+    ports:
+    - "5433:5432" 
+      #- "5432:5432" # expose PostgreSQL à l'hôte
     volumes:
       - db-data:/var/lib/postgresql/data
     networks:
       - app-network
+
 volumes:
   db-data:
+
 networks:
   app-network:
     driver: bridge

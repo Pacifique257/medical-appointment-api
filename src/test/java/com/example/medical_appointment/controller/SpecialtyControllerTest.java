@@ -2,7 +2,6 @@ package com.example.medical_appointment.controller;
 
 
 
-import com.example.medical_appointment.controller.SpecialtyController;
 import com.example.medical_appointment.dto.SpecialtyDTO;
 import com.example.medical_appointment.service.SpecialtyService;
 import org.junit.jupiter.api.BeforeEach;

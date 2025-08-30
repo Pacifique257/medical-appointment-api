@@ -1,6 +1,5 @@
 package com.example.medical_appointment.controller;
 
-import com.example.medical_appointment.controller.AvailabilityController;
 import com.example.medical_appointment.dto.AvailabilityDTO;
 import com.example.medical_appointment.service.AvailabilityService;
 import org.junit.jupiter.api.BeforeEach;

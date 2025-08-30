@@ -2,8 +2,8 @@ package com.example.medical_appointment.controller;
 
 import com.example.medical_appointment.Models.User;
 import com.example.medical_appointment.config.JwtUtil;
-import com.example.medical_appointment.controller.AuthController;
 import com.example.medical_appointment.dto.LoginDTO;
+import com.example.medical_appointment.config.TokenBlacklist;
 import com.example.medical_appointment.service.UserService;
 import io.github.bucket4j.Bucket;
 import org.springframework.http.HttpStatus;
@@ -36,8 +36,8 @@ public class AuthControllerTest {
     @Mock
     private JwtUtil jwtUtil;
 
-//    @Mock
-//    private TokenBlacklist tokenBlacklist;
+    @Mock
+    private TokenBlacklist tokenBlacklist;
 
     @Mock
     private Bucket rateLimitBucket;
@@ -143,7 +143,7 @@ public class AuthControllerTest {
         ResponseEntity<Map<String, String>> response = authController.logout(authorizationHeader);
 
         // Assert
-       // verify(tokenBlacklist).blacklistToken(token);
+        verify(tokenBlacklist).blacklistToken(token);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("Logout successful", response.getBody().get("message"));
     }
