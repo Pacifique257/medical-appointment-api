@@ -37,4 +37,21 @@ public class Appointment {
     private Double consultationFee;
    @Column(nullable = false)
    private String status; // PENDING, CONFIRMED, CANCELLED, COMPLETED
+
+    public Appointment(Long id, User patient, User doctor, Availability availability, LocalDate appointmentDate, String day, String timeSlot, String reason, Double consultationFee, String status) {
+        this.id = id;
+        this.patient = patient;
+        this.doctor = doctor;
+        this.availability = availability;
+        this.appointmentDate = appointmentDate;
+        this.day = day;
+        this.timeSlot = timeSlot;
+        this.reason = reason;
+        this.consultationFee = consultationFee;
+        this.status = status;
+    }
+
+    public Appointment() {
+    }
+
 }

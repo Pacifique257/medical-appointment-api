@@ -29,5 +29,18 @@ public class Availability {
     @OneToOne
     @JoinColumn(name = "appointment_id") // Column in availabilities table
     private Appointment appointment; // Null if slot is free
+
+    public Availability(Long id, User doctor, LocalDate date, String dayOfWeek, String timeSlot, Appointment appointment) {
+        this.id = id;
+        this.doctor = doctor;
+        this.date = date;
+        this.dayOfWeek = dayOfWeek;
+        this.timeSlot = timeSlot;
+        this.appointment = appointment;
+    
+    }
+
+    public Availability() {
+    }
     
 }
